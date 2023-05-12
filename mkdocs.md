@@ -35,4 +35,4 @@ nav:
 
 ## Option 2: Using chromium-headless
 
-
+`pip install mkdocs mkdocs-page-pdf`
