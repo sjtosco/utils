@@ -36,3 +36,13 @@ nav:
 ## Option 2: Using chromium-headless
 
 `pip install mkdocs mkdocs-page-pdf`
+
+Config in `mkdocs.yml`;
+
+```
+plugins:
+    - search
+    - page-to-pdf: # should be last
+        disableOnServe: true
+```
+More info: [https://github.com/brospars/mkdocs-page-pdf](https://github.com/brospars/mkdocs-page-pdf)
