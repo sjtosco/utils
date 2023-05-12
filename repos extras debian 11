@@ -1,0 +1,28 @@
+# Repos Extras Debian 11
+
+## Backports
+In`sudo nano /etc/apt/sources.list` copy and save:
+```
+deb http://deb.debian.org/debian bullseye-backports main contrib non-free
+deb-src http://deb.debian.org/debian bullseye-backports main contrib non-free
+```
+Update package list: `sudo apt update`
+
+## Fasttrack
+
+`sudo apt install fasttrack-archive-keyring`
+
+Add this repo list: `/etc/apt/sources.list.d/fasttrack.list:
+```
+deb https://fasttrack.debian.net/debian-fasttrack/ bullseye-fasttrack main contrib
+deb https://fasttrack.debian.net/debian-fasttrack/ bullseye-backports-staging main contrib
+```
+Update package list: `sudo apt update`
+
+### Virtualbox
+
+Now you can install virtualbox after enable fasttrack repo:
+
+```
+sudo apt install virtualbox virtualbox-ext-pack
+```

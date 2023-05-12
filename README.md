@@ -1,2 +1,2 @@
-# utils
-Usefull tips and tools
+# Utils
+Usefull scripts
