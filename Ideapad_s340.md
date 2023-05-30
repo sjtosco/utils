@@ -199,3 +199,16 @@ adjust for mod4+f11
 and reboot
 
 > From: https://forums.linuxmint.com/viewtopic.php?t=327629
+
+## English composite key ALTGR
+
+1. Open the Activities overview and start typing Tweaks.
+2. Click Tweaks to open the application.
+3. Click the Keyboard & Mouse tab.
+4. Click Disabled next to the Compose Key setting.
+5. Turn the switch on in the dialog and pick the keyboard shortcut you want to use.
+6. Tick the checkbox of the key that you want to set as the Compose key.
+7. Close the dialog.
+8. Close the Tweaks window.
+
+> https://help.gnome.org/users/gnome-help/stable/tips-specialchars.html.en 
