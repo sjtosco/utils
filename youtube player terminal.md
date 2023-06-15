@@ -1,3 +1,11 @@
+# New Yewtube
+In debian 12 use:
+
+```
+pipx install yewtube
+```
+
+# old
 Install: [https://ugeek.github.io/blog/post/2021-03-26-ytfzf-youtube-desde-la-terminal.html](https://ugeek.github.io/blog/post/2021-03-26-ytfzf-youtube-desde-la-terminal.html)
 
 Dependences: 
