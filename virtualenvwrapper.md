@@ -10,3 +10,16 @@ export WORKON_HOME=$HOME/.virtualenvs
 export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3
 source /usr/local/bin/virtualenvwrapper.sh
 ```
+
+## Debian 12 updates
+
+Just install:
+
+```
+sudo apt install virtualenvwrapper
+```
+
+and copy all above info in .bashrc file except last line. It must be corrected to:
+```
+source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
+```
