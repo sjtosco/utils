@@ -9,7 +9,7 @@ This explanation is about custom Python 3.7.3 build in User domain folder. Base 
 
 ```
 sudo apt install build-essential cmake linux-headers-amd64
-sudo apt-get install libffi-dev libgdbm-dev libsqlite3-dev libssl-dev zlib1g-dev libncurses-dev
+sudo apt-get install libffi-dev libgdbm-dev libsqlite3-dev libssl-dev zlib1g-dev libncurses-dev libreadline-dev tk-dev libc6-dev libbz2-dev
 ```
 
 Note: Check if `zlib1g-dev` is not installed yet.
@@ -42,8 +42,5 @@ mkvirtualenv my_custom_venv -p/opt/python/3.7.3/bin/python3
 
 ### Fix setuptools version
 
-Fix setuptools version: `pip install setuptools==58.2`
+Fix setuptools version: `pip install -U setuptools==58.2`
 
-### Fix arrow search of history commands
-
-Inside this venv, you can install `pip install readline`.
