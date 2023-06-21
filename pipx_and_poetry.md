@@ -17,3 +17,10 @@ Follow `pipx completions` instructions.
 pipx install poetry
 poetry completions bash >> ~/.poetryrc
 ```
+
+Add to `$HOME/.bashrc`:
+
+```
+# Poetry
+source $HOME/.poetryrc
+```
