@@ -142,6 +142,21 @@ amixer set Capture toggle && amixer get Capture | grep '\[off\]' && notify-send 
 adjust for mod4+f4
 
 ## Brightness NEW SOLUTION
+
+### Wayland support hardware
+
+Creates shortcut with these commands:
+
+```
+# UP
+brightnessctl -d "intel_backlight" set 5%+
+
+#DOWN
+brightnessctl -d "intel_backlight" set 5%-
+```
+
+### XDOTOOL (XORG only)
+
 Install `sudo apt install xdotool` . Configure shortcuts for:
 * xdotool sleep 0.5 key XF86MonBrightnessUP  (Maybe use 233 code)
 * xdotool sleep 0.5 key XF86MonBrightnessDOWN (Maybe use 232 code)
