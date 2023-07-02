@@ -9,10 +9,9 @@ This explanation is about custom Python 3.7.3 build in User domain folder. Base 
 
 ```
 sudo apt install build-essential cmake linux-headers-amd64
-sudo apt-get install libffi-dev libgdbm-dev libsqlite3-dev libssl-dev zlib1g-dev libncurses-dev libreadline-dev tk-dev libc6-dev libbz2-dev
+sudo apt install libffi-dev libgdbm-dev libsqlite3-dev libssl-dev zlib1g-dev libncurses-dev libreadline-dev tk-dev libc6-dev libbz2-dev
+sudo apt install tk-dev
 ```
-
-Note: Check if `zlib1g-dev` is not installed yet.
 
 ## Steps
 
@@ -32,7 +31,7 @@ make -j"$(nproc)"
 sudo make install
 ```
 
-## Create virtualenv
+## Create virtualenv (Why you not use *poetry* instead???)
 
 Create a custom virtualenv, activate it, and install:
 
