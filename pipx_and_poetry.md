@@ -1,6 +1,6 @@
 # Installation on Debian 12
 
-First ensure: `sudo apt install python3-pip`
+First ensure: `sudo apt install python3-pip python3-venv`
 First, go to user home directory: `cd $HOME`
 
 ## pipx
