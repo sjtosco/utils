@@ -222,7 +222,13 @@ Execute, inside venv, with: `python conv_mnist.py`
 
 # Install on Debian 12.1
 
-Install `sudo apt install nvidia-cuda-toolkit`
+Install `sudo apt install nvidia-cuda-toolkit nvidia-cuddn`.
+Download cudnn from site; *tar* version. Unzip it: `tar -xvf cudnn-linux-x86_64-8.9.4.25_cuda12-archive.tar.xz`. 
+From folder do:
 
-Download `https://developer.nvidia.com/downloads/compute/cudnn/secure/8.9.4/local_installers/12.x/cudnn-local-repo-debian11-8.9.4.25_1.0-1_amd64.deb/` from Nvidia and install it.
-Download `https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/8.6.1/local_repos/nv-tensorrt-local-repo-ubuntu2204-8.6.1-cuda-11.8_1.0-1_amd64.deb` TensorRT from Nvidia and install it.
+```
+sudo cp cudnn-*-archive/include/cudnn*.h /usr/lib/cuda/include 
+sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/lib/cuda/lib64 
+sudo chmod a+r /usr/lib/cuda/include/cudnn*.h /usr/lib/cuda/lib64/libcudnn*
+```
+Restart!
