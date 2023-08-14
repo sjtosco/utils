@@ -222,13 +222,6 @@ Execute, inside venv, with: `python conv_mnist.py`
 
 # Install on Debian 12.1
 
-Install `sudo apt install nvidia-cuda-toolkit nvidia-cuddn`.
-Download cudnn from site; *tar* version. Unzip it: `tar -xvf cudnn-linux-x86_64-8.9.4.25_cuda12-archive.tar.xz`. 
-From folder do:
+Install `sudo apt install nvidia-cuda-toolkit`. Login in [https://developer.nvidia.com/rdp/cudnn-download](https://developer.nvidia.com/rdp/cudnn-download) and, from Archives, **Download cuDNN v8.6.0 (October 3rd, 2022), for CUDA 11.x (Debian 11 deb)**. Install it following this [official guide](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#installlinux-deb)
 
-```
-sudo cp cudnn-*-archive/include/cudnn*.h /usr/lib/cuda/include 
-sudo cp -P cudnn-*-archive/lib/libcudnn* /usr/lib/cuda/lib64 
-sudo chmod a+r /usr/lib/cuda/include/cudnn*.h /usr/lib/cuda/lib64/libcudnn*
-```
-Restart!
+After, you must use in your env tensorflow 2.13.
