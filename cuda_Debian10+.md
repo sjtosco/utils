@@ -225,3 +225,4 @@ Execute, inside venv, with: `python conv_mnist.py`
 Install `sudo apt install nvidia-cuda-toolkit`
 
 Download `https://developer.nvidia.com/downloads/compute/cudnn/secure/8.9.4/local_installers/12.x/cudnn-local-repo-debian11-8.9.4.25_1.0-1_amd64.deb/` from Nvidia and install it.
+Download `https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/8.6.1/local_repos/nv-tensorrt-local-repo-ubuntu2204-8.6.1-cuda-11.8_1.0-1_amd64.deb` TensorRT from Nvidia and install it.
