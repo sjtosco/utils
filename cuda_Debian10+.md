@@ -218,3 +218,10 @@ print("Test accuracy:", score[1])
 
 ```
 Execute, inside venv, with: `python conv_mnist.py`
+
+
+# Install on Debian 12.1
+
+Install `sudo apt install nvidia-cuda-toolkit`
+
+Download `https://developer.nvidia.com/downloads/compute/cudnn/secure/8.9.4/local_installers/12.x/cudnn-local-repo-debian11-8.9.4.25_1.0-1_amd64.deb/` from Nvidia and install it.
