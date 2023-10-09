@@ -24,6 +24,6 @@ Add to `$HOME/.bashrc`:
 # Poetry
 source $HOME/.poetryrc
 ```
-### Error "prompt"
+### Error "Failed to create the collection: Prompt dismissed"
 
 Workaround `export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring`.
