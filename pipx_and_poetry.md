@@ -24,3 +24,6 @@ Add to `$HOME/.bashrc`:
 # Poetry
 source $HOME/.poetryrc
 ```
+### Error "prompt"
+
+Workaround `export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring`.
