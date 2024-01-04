@@ -79,6 +79,22 @@ Creates a file */usr/local/bin/airplanemode-toggle.sh* with this:
 
 ```
 #!/usr/bin/env bash
+wifi="$(nmcli r wifi | awk 'FNR = 2 {print $1}')"
+if [ "$wifi" == "enabled" ] 
+then
+    nmcli r wifi off
+else
+    nmcli r wifi on
+fi
+
+```
+Adjust keyboard shortkey to ,MOD4.+F7
+
+### Old for Gnome Desktop
+Creates a file */usr/local/bin/airplanemode-toggle.sh* with this:
+
+```
+#!/usr/bin/env bash
 /usr/sbin/rfkill list | grep -q '\byes\b' && /usr/sbin/rfkill unblock all || /usr/sbin/rfkill block all
 ```
 
