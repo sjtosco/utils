@@ -6,7 +6,7 @@ First, go to user home directory: `cd $HOME`
 ## pipx
 
 ```
-sudo apt install pipx
+sudo apt install pipx --no-install-recommends
 pipx ensurepath
 ```
 Follow `pipx completions` instructions.
