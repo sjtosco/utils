@@ -1,4 +1,14 @@
-# Install latest Firefox Stable in Debian
+# Firefox and Debian 12
+
+Create `/etc/environment.d/23firefox.conf`:
+
+```
+MOZ_ENABLE_WAYLAND=1
+```
+
+> https://bbs.archlinux.org/viewtopic.php?id=258954
+
+## Install latest Firefox Stable in Debian
 
 ## Manual (Preferred)
 * First download from [Official Web](https://www.mozilla.org/es-ES/firefox/new/).
