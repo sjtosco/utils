@@ -10,7 +10,37 @@ MOZ_ENABLE_WAYLAND=1
 
 ## Install latest Firefox Stable in Debian
 
-## Manual (Preferred)
+## From firefox oficial repo (Preferred)
+
+> [Oficial firefox web instructions](https://support.mozilla.org/en-US/kb/install-firefox-linux#w_install-firefox-deb-package-for-debian-based-distributions)
+
+```
+sudo install -d -m 0755 /etc/apt/keyrings
+wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | sudo tee /etc/apt/keyrings/packages.mozilla.org.asc > /dev/null
+```
+
+Check The fingerprint should be 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3:
+
+```
+gpg -n -q --import --import-options import-show /etc/apt/keyrings/packages.mozilla.org.asc | awk '/pub/{getline; gsub(/^ +| +$/,""); print "\n"$0"\n"}' 
+```
+
+Add repo and install
+
+```
+echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | sudo tee -a /etc/apt/sources.list.d/mozilla.list > /dev/null
+
+echo '
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000
+' | sudo tee /etc/apt/preferences.d/mozilla
+
+sudo apt-get update && sudo apt-get install firefox
+```
+
+
+## Manual 
 * First download from [Official Web](https://www.mozilla.org/es-ES/firefox/new/).
 
 * Second uncompress, move and give right permissions: `tar xfv firefox-*.tar.bz2 && sudo mv firefox /opt/ && sudo chmod 755 -R /opt/firefox`.
