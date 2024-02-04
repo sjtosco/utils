@@ -6,6 +6,7 @@ If you need a portable Python 3.7.3 for development, download from [Github indyg
 ## Local Build custom
 
 ```
+sudo apt install -y libreadline-dev libbz2-dev libncursesw5-dev libgdbm-dev zlib1g-dev liblzma-dev libsqlite3-dev libssl-dev libffi-dev
 cd /opt
 sudo wget https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tgz
 sudo tar -xvf Python-3.7.3.tgz
