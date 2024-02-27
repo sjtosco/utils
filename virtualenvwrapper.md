@@ -23,3 +23,19 @@ and copy all above info in .bashrc file except last line. It must be corrected t
 ```
 source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
 ```
+
+## Using PIPX (maybe better)
+
+Just install:
+
+```
+pipx install virtualenvwrapper
+```
+
+In `.bashrc` file add:
+```bash
+# virtualenv and virtualenvwrapper
+export WORKON_HOME=$HOME/.virtualenvs
+export VIRTUALENVWRAPPER_PYTHON=$HOME/.local/pipx/venvs/virtualenvwrapper/bin/python3
+source $HOME/.local/pipx/venvs/virtualenvwrapper/bin/virtualenvwrapper.sh
+```
