@@ -69,3 +69,15 @@ Launch `docker compose up -d`.
 Create cert using: [http://wg.pve.lan:81] (Accessible only from LAN / VPN)
 
 Enjoy!
+
+> NOTE: You must manually open WG UDP port on router.
+
+## Debian client (using nmcli) commands
+
+Create: `nmcli connection import type wireguard file Homelab.conf`
+List: `nmcli connection show`
+Delete: `nmcli connection delete Homelab`
+
+## GUI administration
+
+You can use "Advanced Network Configuration" (`nm-connection-editor`). More limited, at least, in Debian 12.
