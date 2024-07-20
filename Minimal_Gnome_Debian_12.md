@@ -263,3 +263,36 @@ export WORKON_HOME=$HOME/.virtualenvs
 export VIRTUALENVWRAPPER_PYTHON=$HOME/.local/pipx/venvs/virtualenvwrapper/bin/python3
 source $HOME/.local/pipx/venvs/virtualenvwrapper/bin/virtualenvwrapper.sh
 ```
+## Grub
+
+`sudo apt -y install plymouth plymouth-themes`
+
+List and select:
+
+```
+sudo plymouth-set-default-theme -l
+sudo plymouth-set-default-theme bgrt -R
+```
+
+Edit grub:
+
+```
+GRUB_DEFAULT="0"
+GRUB_TIMEOUT="0"
+GRUB_TIMEOUT_STYLE="hidden"
+GRUB_HIDDEN_TIMEOUT_QUIET="true"
+GRUB_BACKGROUND=""
+GRUB_DISTRIBUTOR="`lsb_release -i -s 2> /dev/null || echo Debian`"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_CMDLINE_LINUX=""
+
+```
+
+Change *quiet_boot* to *1* in `/etc/grub.d/10_linux`.
+
+Apply:
+
+```
+sudo update-initramfs -u
+sudo update-grub
+```
