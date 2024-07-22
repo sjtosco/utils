@@ -22,6 +22,12 @@ After login install Nautilus, Text Editor, basic Shell-Extensions and other basi
 sudo apt install gnome-text-editor nautilus nautilus-dropbox nautilus-admin nautilus-image-converter gnome-tweaks gnome-shell-extension-manager gnome-shell-extension-caffeine gnome-shell-extension-top-icons-plus gnome-disk-utility gnome-system-monitor gnome-power-manager htop ifstat iotop vim
 ```
 
+Fix obs screencapture gnome:
+
+```
+sudo apt install xdg-desktop-portal-gnome
+```
+
 Firmware and basic build tools:
 
 ```
