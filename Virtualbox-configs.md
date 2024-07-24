@@ -42,6 +42,7 @@ VBoxManage modifyvm myVM --nested-hw-virt on
   * `service rsyslog stop && service network-manager stop && pkill dhclient`.
 * Once they’ve stopped, you can re-mount the partition as readonly (zerofree needs this): `mount -n -o remount,ro -t ext3 /dev/sda1 /`
 * You can now run zerofree: `zerofree -v /dev/sda1`.
-* Finally, shut down the VM: `shutdown -h now`.
-* You can shrink the image in-place with the following command: `VBoxManage modifyhd my.vdi –compact`. You must replace my.vdi with the name of the vdi you'd like to shrink (located on `VirtualBox VMs` folder).
+* Shut down the VM: `shutdown -h now`.
+* You can shrink the image in-place (on Host) with the following command: `VBoxManage modifyhd my.vdi --compact`. You must replace my.vdi with the name of the vdi you'd like to shrink (located on `VirtualBox VMs` folder).
+* Finally, export from Virtualbox GUI interface to Movilive.ova. 
 
