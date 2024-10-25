@@ -1,3 +1,7 @@
+# NEW INSTALL DEBIAN 12 - from NVIDIA
+
+Install whole system with Noveau. After follow: [https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/index.html#debian](https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/index.html#debian)
+
 # Install Cuda 10 + Tensorflow-gpu on debian 10 buster
 
 # Install new nvidia driver (for maximum compatibility on new Geforce boards)
