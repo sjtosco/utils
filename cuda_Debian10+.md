@@ -1,6 +1,20 @@
 # NEW INSTALL DEBIAN 12 - from NVIDIA
 
 Install whole system with Noveau. After follow: [https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/index.html#debian](https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/index.html#debian)
+For *proprietary drivers*:
+
+```
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt-get -V install cuda-drivers
+sudo reboot
+```
+
+After, [https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#common-installation-instructions-for-debian](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#common-installation-instructions-for-debian):
+
+```
+sudo apt-get install cuda-toolkit cudnn
+```
 
 # Install Cuda 10 + Tensorflow-gpu on debian 10 buster
 
