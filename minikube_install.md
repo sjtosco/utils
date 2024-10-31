@@ -21,7 +21,7 @@ From home folder do...
 First: `minikube completion bash > .minikuberc`
 Second: `kubectl completion bash > .kubectlrc`
 
-Download new release from: [[https://github.com/hidetatz/kubecolor/releases](https://github.com/hidetatz/kubecolor/releases)](https://github.com/kubecolor/kubecolor/releases)
+Download new release from: [https://github.com/kubecolor/kubecolor/releases](https://github.com/kubecolor/kubecolor/releases)
 
 Untar, give execution permissions and move binary to `/usr/local/bin` folder.
 
