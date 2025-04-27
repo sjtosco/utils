@@ -161,6 +161,12 @@ sudo apt install -y gnome-weather dconf-editor
 sudo apt install -y dia dia-shapes dia-rib-network
 ```
 
+Short version (without MAC stuff): 
+```
+sudo apt install -y gdebi nvme-cli rar unrar unace p7zip-rar lzip arj sharutils mpack lzma lzop zip lhasa cabextract lrzip rzip zpaq kgb menulibre  ttf-mscorefonts-installer && sudo fc-cache -fv
+sudo apt install -y font-manager mtp-tools exfat-fuse default-jre gufw guvcview winff dconf-editor dia dia-shapes dia-rib-network
+```
+
 ## Themes
 
 ```
