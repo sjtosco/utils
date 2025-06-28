@@ -19,12 +19,6 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     show_help
 fi
 
-# Asegura directorios y configuración básica
-init_config() {
-    mkdir -p "$CONFIG_DIR"
-    grep -q "include = $CONFIG_DIR/*.conf" "$SMB_CONF_MAIN" 2>/dev/null || echo "include = $CONFIG_DIR/*.conf" >> "$SMB_CONF_MAIN"
-}
-
 # Selección de editor
 choose_editor() {
     echo "Seleccione editor:"
@@ -241,6 +235,5 @@ main_menu() {
 }
 
 # Ejecutar
-init_config
 choose_editor
 main_menu
