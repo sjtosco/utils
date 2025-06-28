@@ -2,6 +2,7 @@
 
 CONFIG_DIR="/etc/samba/smb.conf.d"
 SMB_CONF_MAIN="/etc/samba/smb.conf"
+SMB_DYNAMIC_CONF="/etc/samba/smb_dynamic.conf"
 NFS_EXPORTS="/etc/exports"
 
 show_help() {
@@ -18,6 +19,27 @@ show_help() {
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     show_help
 fi
+
+# Inicializa configuración básica
+init_config() {
+    mkdir -p "$CONFIG_DIR"
+    # Agregar include solo si no está
+    if ! grep -Fq "include = $SMB_DYNAMIC_CONF" "$SMB_CONF_MAIN" 2>/dev/null; then
+        echo "include = $SMB_DYNAMIC_CONF" >> "$SMB_CONF_MAIN"
+    fi
+    # Asegura que el archivo dinámico exista (vacío al inicio)
+    [ -f "$SMB_DYNAMIC_CONF" ] || echo "" > "$SMB_DYNAMIC_CONF"
+}
+
+# Actualiza archivo dinámico concatenando todos los .conf individuales
+update_dynamic_smb_conf() {
+    if ls "$CONFIG_DIR"/*.conf &>/dev/null; then
+        cat "$CONFIG_DIR"/*.conf > "$SMB_DYNAMIC_CONF"
+    else
+        # Si no hay archivos, archivo dinámico vacío
+        echo "" > "$SMB_DYNAMIC_CONF"
+    fi
+}
 
 # Selección de editor
 choose_editor() {
@@ -43,6 +65,8 @@ list_and_edit_file() {
             break
         elif [ "$file" ]; then
             $EDITOR "$path/$file"
+            update_dynamic_smb_conf
+            rc-service samba restart
             break
         else
             echo "Opción inválida."
@@ -60,23 +84,26 @@ add_smb_share() {
     cat <<EOF > "$CONFIG_DIR/$share_name.conf"
 [$share_name]
    path = $share_path
+   public = no
    browseable = yes
    read only = no
    guest ok = no
    create mask = 0775
    directory mask = 0775
+   force user = root
+   veto files = 
+   hide files = 
 EOF
 
-    echo "[+] Share SMB '$share_name' creado."
+    update_dynamic_smb_conf
     rc-service samba restart
+    echo "[+] Share SMB '$share_name' creado."
     sleep 1
 }
 
 # Editar configuración SMB
 edit_smb_share() {
     list_and_edit_file "$CONFIG_DIR"
-    rc-service samba restart
-    sleep 1
 }
 
 # Borrar share SMB
@@ -97,6 +124,7 @@ delete_smb_share() {
             read confirm
             if [[ "$confirm" =~ ^[sS]$ ]]; then
                 rm -f "$CONFIG_DIR/$file"
+                update_dynamic_smb_conf
                 rc-service samba restart
                 echo "Share SMB '$file' borrado y samba reiniciado."
                 sleep 1
@@ -235,5 +263,6 @@ main_menu() {
 }
 
 # Ejecutar
+init_config
 choose_editor
 main_menu
