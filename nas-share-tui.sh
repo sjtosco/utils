@@ -139,76 +139,68 @@ edit_nfs_exports() {
     sleep 1
 }
 
-# Mostrar estado servicios SMB y NFS
+# Mostrar estado de servicios individualmente
+check_service_status() {
+    local svc=$1
+    local status run_status enabled_status
+
+    if rc-service "$svc" status | grep -q "started"; then
+        run_status="en ejecución"
+    else
+        run_status="detenido"
+    fi
+
+    if rc-update show | awk -v svc="$svc" '$1 == svc && $3 == "default"' | grep -q .; then
+        enabled_status="habilitado"
+    else
+        enabled_status="deshabilitado"
+    fi
+
+    echo "- $svc: $run_status, inicio $enabled_status"
+}
+
+# Mostrar estado servicios
 service_status() {
     echo "Estado de servicios:"
-    for svc in samba nfs; do
-        status=$(rc-service "$svc" status 2>&1)
-        if echo "$status" | grep -q "started"; then
-            run_status="en ejecución"
-        else
-            run_status="detenido"
-        fi
-
-        if rc-update show | grep -q "^$svc.*default"; then
-            enabled_status="habilitado"
-        else
-            enabled_status="deshabilitado"
-        fi
-
-        echo "- $svc: $run_status, inicio $enabled_status"
-    done
+    check_service_status samba
+    check_service_status nfs
     echo
     read -rp "Presiona Enter para continuar..."
 }
 
-# Control de servicios SMB y NFS
+# Control de servicios individualmente
 service_control() {
-    echo "Control servicios:"
-    select opt in "Iniciar" "Detener" "Reiniciar" "Habilitar inicio" "Deshabilitar inicio" "Volver"; do
-        case $opt in
-            "Iniciar")
-                rc-service samba start
-                rc-service nfs start
-                echo "Servicios iniciados."
+    echo "Selecciona el servicio:"
+    select svc in "samba" "nfs" "Volver"; do
+        case $svc in
+            "samba"|"nfs")
+                echo "Control de $svc:"
+                select action in "Iniciar" "Detener" "Reiniciar" "Habilitar inicio" "Deshabilitar inicio" "Volver"; do
+                    case $action in
+                        "Iniciar") rc-service $svc start ;;
+                        "Detener") rc-service $svc stop ;;
+                        "Reiniciar") rc-service $svc restart ;;
+                        "Habilitar inicio") rc-update add $svc default ;;
+                        "Deshabilitar inicio") rc-update del $svc default ;;
+                        "Volver") break ;;
+                        *) echo "Opción inválida" ;;
+                    esac
+                    sleep 1
+                done
                 ;;
-            "Detener")
-                rc-service samba stop
-                rc-service nfs stop
-                echo "Servicios detenidos."
-                ;;
-            "Reiniciar")
-                rc-service samba restart
-                rc-service nfs restart
-                echo "Servicios reiniciados."
-                ;;
-            "Habilitar inicio")
-                rc-update add samba default
-                rc-update add nfs default
-                echo "Servicios habilitados en inicio."
-                ;;
-            "Deshabilitar inicio")
-                rc-update del samba default
-                rc-update del nfs default
-                echo "Servicios deshabilitados en inicio."
-                ;;
-            "Volver")
-                break
-                ;;
-            *)
-                echo "Opción inválida."
-                ;;
+            "Volver") break ;;
+            *) echo "Opción inválida" ;;
         esac
-        sleep 1
     done
 }
 
+# Menú de servicios
 service_menu() {
     while true; do
         clear
         echo "=== Administración de Servicios ==="
-        echo "1) Estado servicios SMB y NFS"
-        echo "2) Control servicios SMB y NFS"
+        echo "1) Estado servicios"
+        echo "2) Control por servicio"
         echo "3) Volver"
         echo -n "Opción [1-3]: "
         read opt
