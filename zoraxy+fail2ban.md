@@ -16,7 +16,7 @@ This separation allows configuring different thresholds, ban durations, and spec
 
 ```
 [Definition]
-failregex = \[client: <HOST>\].*POST\s(/api/auth|/login)\s401
+failregex = \[client: <HOST>\].*POST\s(/api/auth|/login)\s(401|422)
 ```
 
 `/etc/fail2ban/filter.d/zoraxy-errors.conf`:
@@ -54,7 +54,7 @@ bantime   = 1h
 banaction = iptables-allports
 
 # ------------------------
-# Jail para intentos fallidos de login (401 en /api/auth o /login)
+# Jail para intentos fallidos de login (401 o 422 en /api/auth o /login)
 [zoraxy-auth]
 enabled   = true
 filter    = zoraxy-auth
