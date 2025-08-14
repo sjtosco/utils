@@ -142,6 +142,26 @@ else
 	/usr/bin/notify-send -t 2000 -i camera-web "Camera OFF"
 fi
 ```
+
+NEW VERSION:
+
+```
+#!/usr/bin/env bash
+
+device="1-5"
+# Verificar si el módulo uvcvideo está cargado
+if ls /sys/bus/usb/drivers/usb/ | grep -q $device; then
+    # Si está cargado, desactivar la cámara
+    echo $device | sudo tee /sys/bus/usb/drivers/usb/unbind
+    /usr/bin/notify-send -t 2000 -i camera-web "Camera OFF"
+else
+    # Si no está cargado, activar la cámara
+    echo $device | sudo tee /sys/bus/usb/drivers/usb/bind
+    /usr/bin/notify-send -t 2000 -i camera-web "Camera ON"
+fi
+
+```
+
 Adjust keyboard shortkey to ,MOD4.+F8
 
 ## Mic Toggle
