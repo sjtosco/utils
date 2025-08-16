@@ -29,6 +29,7 @@ source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
 Just install:
 
 ```
+pipx install virtualenv
 pipx install virtualenvwrapper
 ```
 
@@ -38,4 +39,14 @@ In `.bashrc` file add:
 export WORKON_HOME=$HOME/.virtualenvs
 export VIRTUALENVWRAPPER_PYTHON=$HOME/.local/pipx/venvs/virtualenvwrapper/bin/python3
 source $HOME/.local/pipx/venvs/virtualenvwrapper/bin/virtualenvwrapper.sh
+```
+
+### In Debian 13 FIX
+
+In `.bashrc` file add this lines:
+```bash
+# virtualenv and virtualenvwrapper
+export WORKON_HOME=$HOME/.virtualenvs
+export VIRTUALENVWRAPPER_PYTHON=$HOME/.local/share/pipx/venvs/virtualenvwrapper/bin/python3
+source $HOME/.local/share/pipx/venvs/virtualenvwrapper/bin/virtualenvwrapper.sh
 ```
