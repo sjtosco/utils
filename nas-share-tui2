@@ -153,8 +153,8 @@ add_nfs_export() {
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.1.0/24): "
     read export_network
-
-    echo "$export_path $export_network(rw,sync,no_subtree_check,no_root_squash)" >> "$NFS_EXPORTS"
+    fsid=$(echo -n "$export_path" | cksum | awk '{print $1}')
+    echo "$export_path $export_network(rw,sync,no_subtree_check,no_root_squash,fsid=$fsid)" >> "$NFS_EXPORTS"
     exportfs -ra
     rc-service nfs restart
     echo "[+] Export NFS agregado."
