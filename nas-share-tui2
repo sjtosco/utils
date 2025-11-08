@@ -99,8 +99,9 @@ add_smb_share() {
    read only = no
    guest ok = no
    create mask = 0775
-   directory mask = 0775
-   force user = root
+   directory mask = 2775
+   force user = nas
+   force group = nas
    veto files = 
    hide files = 
 EOF
@@ -153,7 +154,7 @@ add_nfs_export() {
     echo -n "Red/IP permitida (ej. 192.168.1.0/24): "
     read export_network
 
-    echo "$export_path $export_network(rw,sync,no_subtree_check)" >> "$NFS_EXPORTS"
+    echo "$export_path $export_network(rw,sync,no_subtree_check,no_root_squash)" >> "$NFS_EXPORTS"
     exportfs -ra
     rc-service nfs restart
     echo "[+] Export NFS agregado."
