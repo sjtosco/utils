@@ -153,13 +153,28 @@ add_nfs_export() {
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.1.0/24): "
     read export_network
-    fsid=$(echo -n "$export_path" | cksum | awk '{print $1}')
+
+    # Buscar si ya existe un fsid asignado a este export_path
+    existing_fsid=$(grep -E "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS" \
+                    | sed 's/.*fsid=\([0-9]*\).*/\1/' | head -n1)
+
+    if [ -n "$existing_fsid" ]; then
+        fsid="$existing_fsid"
+        echo "[+] Reutilizando fsid existente: $fsid"
+    else
+        # fsid nuevo pero persistente por path
+        fsid=$(echo -n "$export_path" | cksum | awk '{print $1}')
+        echo "[+] Generando nuevo fsid: $fsid"
+    fi
+
     echo "$export_path $export_network(rw,sync,no_subtree_check,root_squash,fsid=$fsid)" >> "$NFS_EXPORTS"
+
     exportfs -ra
     rc-service nfs restart
     echo "[+] Export NFS agregado."
     sleep 1
 }
+
 
 edit_nfs_exports() {
     $EDITOR "$NFS_EXPORTS"
