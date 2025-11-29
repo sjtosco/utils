@@ -8,6 +8,8 @@
 docker_info() {
     echo "Docker service status:"
     systemctl is-active docker
+    echo "Docker socket status:"
+    systemctl is-active docker.socket
     if pgrep -x dockerd >/dev/null; then
         ram=$(ps -o rss= -p $(pgrep -x dockerd) | awk '{printf "%.2f MB\n", $1/1024}')
         echo "Docker is using approximately: $ram RAM"
@@ -20,10 +22,10 @@ docker_info() {
 show_help() {
     echo "Description: Script for admin docker engine service."
     echo "Usage: docker-service {start|stop|enable|disable|status|help}"
-    echo "  start   - Start Docker immediately"
-    echo "  stop    - Stop Docker immediately"
-    echo "  enable  - Enable Docker to start at system boot"
-    echo "  disable - Disable Docker from starting at system boot"
+    echo "  start   - Start Docker immediately (includes docker.socket)"
+    echo "  stop    - Stop Docker immediately (includes docker.socket)"
+    echo "  enable  - Enable Docker and docker.socket at system boot"
+    echo "  disable - Disable Docker and docker.socket at system boot"
     echo "  status  - Show Docker status and RAM usage"
     echo "  help    - Show this help message"
 }
@@ -37,23 +39,28 @@ fi
 case "$1" in
     start)
         echo "Starting Docker..."
+        sudo systemctl start containerd
         sudo systemctl start docker
+        sudo systemctl start docker.socket
         docker_info
         ;;
     stop)
         echo "Stopping Docker..."
-        sudo systemctl stop docker
+        sudo systemctl stop docker.socket   # Primero el socket
+        sudo systemctl stop docker          # Luego el servicio
         sudo systemctl stop containerd
         docker_info
         ;;
     enable)
         echo "Enabling Docker at system boot..."
-        sudo systemctl enable docker
         sudo systemctl enable containerd
+        sudo systemctl enable docker
+        sudo systemctl enable docker.socket
         docker_info
         ;;
     disable)
         echo "Disabling Docker at system boot..."
+        sudo systemctl disable docker.socket
         sudo systemctl disable docker
         sudo systemctl disable containerd
         docker_info
