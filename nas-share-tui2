@@ -149,9 +149,9 @@ delete_smb_share() {
 }
 
 add_nfs_export() {
-    local NFS_ROOT="/data"
+    local NFS_ROOT="/mnt/data"
 
-    echo -n "Ruta a exportar vía NFS (/data o subdir): "
+    echo -n "Ruta a exportar vía NFS (/mnt/data o subdir): "
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
     read export_network
