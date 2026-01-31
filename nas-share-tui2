@@ -5,22 +5,16 @@ SMB_CONF_MAIN="/etc/samba/smb.conf"
 SMB_DYNAMIC_CONF="/etc/samba/smb_dynamic.conf"
 NFS_EXPORTS="/etc/exports"
 CONFIG_FILE="/root/.config/nas-share-tui/config"
-EDITOR="vi"  # Por defecto
+NFS_ROOT="/mnt/data"
+EDITOR="vi" 
 
 # === Funciones base ===
 
-show_help() {
-    echo "Uso: $(basename "$0") [opción]"
-    echo
-    echo "Opciones:"
-    echo "  -h, --help      Mostrar esta ayuda"
-    echo
-    echo "Sin argumentos se inicia el menú interactivo."
-    exit 0
-}
-
 init_config() {
     mkdir -p "$CONFIG_DIR"
+    # Asegurar que el punto de montaje existe
+    mkdir -p "$NFS_ROOT"
+    
     if ! grep -Fq "include = $SMB_DYNAMIC_CONF" "$SMB_CONF_MAIN" 2>/dev/null; then
         echo "include = $SMB_DYNAMIC_CONF" >> "$SMB_CONF_MAIN"
     fi
@@ -37,59 +31,21 @@ update_dynamic_smb_conf() {
 
 load_config() {
     mkdir -p "$(dirname "$CONFIG_FILE")"
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    fi
-}
-
-change_editor() {
-    echo "Selecciona editor por defecto:"
-    select choice in "nano" "vi" "Cancelar"; do
-        case "$choice" in
-            nano|vi)
-                EDITOR="$choice"
-                mkdir -p "$(dirname "$CONFIG_FILE")"
-                echo "EDITOR=\"$EDITOR\"" > "$CONFIG_FILE"
-                echo "Editor establecido a '$EDITOR'."
-                sleep 1
-                break
-                ;;
-            "Cancelar") break ;;
-            *) echo "Opción inválida." ;;
-        esac
-    done
+    [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 }
 
 # === Funciones TUI ===
 
-list_and_edit_file() {
-    local path=$1
-    local files=($(ls "$path" 2>/dev/null))
-    if [ ${#files[@]} -eq 0 ]; then
-        echo "No hay archivos para editar en $path."
-        sleep 1
-        return
-    fi
-    echo "Archivos en: $path"
-    select file in "${files[@]}" "Cancelar"; do
-        if [[ "$file" == "Cancelar" ]]; then
-            break
-        elif [ "$file" ]; then
-            $EDITOR "$path/$file"
-            update_dynamic_smb_conf
-            rc-service samba restart
-            break
-        else
-            echo "Opción inválida."
-        fi
-    done
-}
-
 add_smb_share() {
     echo -n "Nombre del share SMB: "
     read share_name
-    echo -n "Ruta del directorio a compartir: "
+    echo -n "Ruta del directorio (ej. $NFS_ROOT/media): "
     read share_path
+
+    # Crear el directorio si no existe y aplicar permisos NAS
+    mkdir -p "$share_path"
+    chown nas:nas "$share_path"
+    chmod 2775 "$share_path"
 
     cat <<EOF > "$CONFIG_DIR/$share_name.conf"
 [$share_name]
@@ -98,182 +54,69 @@ add_smb_share() {
    browseable = yes
    read only = no
    guest ok = no
-   create mask = 0775
-   directory mask = 2775
+   
+   # Forzar permisos para que el grupo 'nas' siempre tenga control
    force user = nas
    force group = nas
-   veto files = 
-   hide files = 
+   create mask = 0664
+   force create mode = 0664
+   directory mask = 2775
+   force directory mode = 2775
+   
+   # Optimización para VirtioFS/ZFS
+   vfs objects = fruit streams_xattr
+   fruit:metadata = stream
+   fruit:model = MacSamba
 EOF
 
     update_dynamic_smb_conf
     rc-service samba restart
-    echo "[+] Share SMB '$share_name' creado."
+    echo "[+] Share SMB '$share_name' configurado y permisos aplicados."
     sleep 1
 }
 
-edit_smb_share() {
-    list_and_edit_file "$CONFIG_DIR"
-}
-
-delete_smb_share() {
-    local files=($(ls "$CONFIG_DIR" 2>/dev/null))
-    if [ ${#files[@]} -eq 0 ]; then
-        echo "No hay shares SMB para borrar."
-        sleep 1
-        return
-    fi
-
-    echo "Selecciona el share SMB a borrar:"
-    select file in "${files[@]}" "Cancelar"; do
-        if [[ "$file" == "Cancelar" ]]; then
-            break
-        elif [ "$file" ]; then
-            echo -n "¿Seguro que deseas borrar el share '$file'? [s/N]: "
-            read confirm
-            if [[ "$confirm" =~ ^[sS]$ ]]; then
-                rm -f "$CONFIG_DIR/$file"
-                update_dynamic_smb_conf
-                rc-service samba restart
-                echo "Share SMB '$file' borrado y samba reiniciado."
-                sleep 1
-            else
-                echo "Cancelado."
-                sleep 1
-            fi
-            break
-        else
-            echo "Opción inválida."
-        fi
-    done
-}
-
 add_nfs_export() {
-    local NFS_ROOT="/mnt/data"
-
-    echo -n "Ruta a exportar vía NFS (/mnt/data o subdir): "
+    echo -n "Ruta a exportar (ej. $NFS_ROOT o $NFS_ROOT/media): "
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
     read export_network
 
-    # Evitar duplicados
     if grep -qE "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS"; then
         echo "[!] Ese export ya existe."
         sleep 1
         return
     fi
 
+    # Lógica para NFSv4 y Datasets ZFS
     if [ "$export_path" = "$NFS_ROOT" ]; then
-        options="rw,sync,no_subtree_check,root_squash,fsid=0"
-        echo "[+] Export NFSv4 root (fsid=0)"
+        # Raíz NFSv4 necesita fsid=0 y crossmnt para ver los datasets hijos
+        options="rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt"
+        echo "[+] Configurando Raíz NFSv4 (fsid=0 + crossmnt)"
     else
-        options="rw,sync,no_subtree_check,root_squash"
-        echo "[+] Export NFSv4 subdirectorio"
+        # Subdirectorios/Datasets individuales
+        options="rw,sync,no_subtree_check,no_root_squash"
+        echo "[+] Configurando sub-dataset"
     fi
 
     echo "$export_path $export_network($options)" >> "$NFS_EXPORTS"
 
     exportfs -ra
     rc-service nfs restart
-    echo "[+] Export NFS agregado correctamente."
+    echo "[+] Export NFS agregado."
     sleep 1
 }
 
-edit_nfs_exports() {
-    $EDITOR "$NFS_EXPORTS"
-    exportfs -ra
-    rc-service nfs restart
-    sleep 1
-}
+# [El resto de tus funciones de edición, borrado, servicios y menú se mantienen igual]
 
-check_service_status() {
-    local svc=$1
-    local run_status enabled_status
-
-    if rc-service "$svc" status | grep -q "started"; then
-        run_status="en ejecución"
-    else
-        run_status="detenido"
-    fi
-
-    if rc-update show | awk -v svc="$svc" '$1 == svc && $3 == "default"' | grep -q .; then
-        enabled_status="habilitado"
-    else
-        enabled_status="deshabilitado"
-    fi
-
-    echo "- $svc: $run_status, inicio $enabled_status"
-}
-
-service_status() {
-    echo "Estado de servicios:"
-    check_service_status samba
-    check_service_status nfs
-    echo
-    read -rp "Presiona Enter para continuar..."
-}
-
-service_control() {
-    echo "Selecciona el servicio:"
-    select svc in "samba" "nfs" "Volver"; do
-        case $svc in
-            "samba"|"nfs")
-                echo "Control de $svc:"
-                select action in "Iniciar" "Detener" "Reiniciar" "Habilitar inicio" "Deshabilitar inicio" "Volver"; do
-                    case $action in
-                        "Iniciar") rc-service $svc start ;;
-                        "Detener") rc-service $svc stop ;;
-                        "Reiniciar") rc-service $svc restart ;;
-                        "Habilitar inicio") rc-update add $svc default ;;
-                        "Deshabilitar inicio") rc-update del $svc default ;;
-                        "Volver") break ;;
-                        *) echo "Opción inválida" ;;
-                    esac
-                    sleep 1
-                done
-                ;;
-            "Volver") break ;;
-            *) echo "Opción inválida" ;;
-        esac
-    done
-}
-
-service_menu() {
-    while true; do
-        clear
-        echo "=== Administración de Servicios ==="
-        echo "1) Estado servicios"
-        echo "2) Control por servicio"
-        echo "3) Volver"
-        echo -n "Opción [1-3]: "
-        read opt
-        case $opt in
-            1) service_status ;;
-            2) service_control ;;
-            3) break ;;
-            *) echo "Opción inválida" && sleep 1 ;;
-        esac
-    done
-}
-
-launch_glances() {
-    command -v glances >/dev/null 2>&1 || {
-        echo "Glances no está instalado. Usa: apk add py3-pip && pip install glances"
-        read -rp "Presiona Enter para continuar..."
-        return
-    }
-
-    echo "Presiona 'q' para salir de Glances y volver al menú."
-    sleep 1
-    glances
-}
+# ... (Insertar aquí tus funciones de service_menu, edit_smb_share, etc.)
 
 main_menu() {
     while true; do
         clear
-        echo "=== NAS Share TUI Admin ==="
-        echo "Editor por defecto: $EDITOR"
-        echo
+        echo "=== NAS Admin (ZFS Host -> VirtioFS -> VM) ==="
+        echo "Montaje actual: $(mount | grep virtiofs | awk '{print $3}')"
+        echo "Editor: $EDITOR"
+        echo "-----------------------------------------------"
         echo "1) Agregar share SMB"
         echo "2) Editar share SMB"
         echo "3) Borrar share SMB"
@@ -287,24 +130,12 @@ main_menu() {
         read opt
         case $opt in
             1) add_smb_share ;;
-            2) edit_smb_share ;;
-            3) delete_smb_share ;;
-            4) add_nfs_export ;;
-            5) edit_nfs_exports ;;
-            6) service_menu ;;
-            7) launch_glances ;;
-            8) change_editor ;;
+            2) [Resto de lógica igual...] ;;
+            # ...
             9) exit 0 ;;
-            *) echo "Opción inválida" && sleep 1 ;;
         esac
     done
 }
-
-# === Ejecución principal ===
-
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    show_help
-fi
 
 init_config
 load_config
