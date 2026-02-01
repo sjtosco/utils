@@ -5,130 +5,6 @@ SMB_CONF_MAIN="/etc/samba/smb.conf"
 SMB_DYNAMIC_CONF="/etc/samba/smb_dynamic.conf"
 NFS_EXPORTS="/etc/exports"
 CONFIG_FILE="/root/.config/nas-share-tui/config"
-NFS_ROOT="/mnt/data"
-EDITOR="vi" 
-
-# === Funciones base ===
-
-init_config() {
-    mkdir -p "$CONFIG_DIR"
-    # Asegurar que el punto de montaje existe
-    mkdir -p "$NFS_ROOT"
-    
-    if ! grep -Fq "include = $SMB_DYNAMIC_CONF" "$SMB_CONF_MAIN" 2>/dev/null; then
-        echo "include = $SMB_DYNAMIC_CONF" >> "$SMB_CONF_MAIN"
-    fi
-    [ -f "$SMB_DYNAMIC_CONF" ] || echo "" > "$SMB_DYNAMIC_CONF"
-}
-
-update_dynamic_smb_conf() {
-    if ls "$CONFIG_DIR"/*.conf &>/dev/null; then
-        cat "$CONFIG_DIR"/*.conf > "$SMB_DYNAMIC_CONF"
-    else
-        echo "" > "$SMB_DYNAMIC_CONF"
-    fi
-}
-
-load_config() {
-    mkdir -p "$(dirname "$CONFIG_FILE")"
-    [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
-}
-
-# === Funciones TUI ===
-
-add_smb_share() {
-    echo -n "Nombre del share SMB: "
-    read share_name
-    echo -n "Ruta del directorio (ej. $NFS_ROOT/media): "
-    read share_path
-
-    # Crear el directorio si no existe y aplicar permisos NAS
-    mkdir -p "$share_path"
-    chown nas:nas "$share_path"
-    chmod 2775 "$share_path"
-
-    cat <<EOF > "$CONFIG_DIR/$share_name.conf"
-[$share_name]
-   path = $share_path
-   public = no
-   browseable = yes
-   read only = no
-   guest ok = no
-   
-   # Forzar permisos para que el grupo 'nas' siempre tenga control
-   force user = nas
-   force group = nas
-   create mask = 0664
-   force create mode = 0664
-   directory mask = 2775
-   force directory mode = 2775
-   
-   # Optimización para VirtioFS/ZFS
-   vfs objects = fruit streams_xattr
-   fruit:metadata = stream
-   fruit:model = MacSamba
-EOF
-
-    update_dynamic_smb_conf
-    rc-service samba restart
-    echo "[+] Share SMB '$share_name' configurado y permisos aplicados."
-    sleep 1
-}
-
-add_nfs_export() {
-    echo -n "Ruta a exportar (ej. $NFS_ROOT o $NFS_ROOT/media): "
-    read export_path
-    echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
-    read export_network
-
-    if grep -qE "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS"; then
-        echo "[!] Ese export ya existe."
-        sleep 1
-        return
-    fi
-
-    # Lógica para NFSv4 y Datasets ZFS
-    if [ "$export_path" = "$NFS_ROOT" ]; then
-        # Raíz NFSv4 necesita fsid=0 y crossmnt para ver los datasets hijos
-        options="rw,sync,no_subtree_check,no_root_squash,fsid=0,crossmnt"
-        echo "[+] Configurando Raíz NFSv4 (fsid=0 + crossmnt)"
-    else
-        # Subdirectorios/Datasets individuales
-        options="rw,sync,no_subtree_check,no_root_squash"
-        echo "[+] Configurando sub-dataset"
-    fi
-
-    echo "$export_path $export_network($options)" >> "$NFS_EXPORTS"
-
-    exportfs -ra
-    rc-service nfs restart
-    echo "[+] Export NFS agregado."
-    sleep 1
-}
-
-# [El resto de tus funciones de edición, borrado, servicios y menú se mantienen igual]
-
-=== NAS Share TUI Admin ===
-Editor por defecto: vi
-
-1) Agregar share SMB
-2) Editar share SMB
-3) Borrar share SMB
-4) Agregar export NFS
-5) Editar exports NFS
-6) Administración servicios
-7) Ver estado del sistema (Glances)
-8) Cambiar editor por defecto
-9) Salir
-Opción [1-9]: 9
-nas:~# cat /usr/local/bin/nas-share-tui2 
-#!/bin/bash
-
-CONFIG_DIR="/etc/samba/smb.conf.d"
-SMB_CONF_MAIN="/etc/samba/smb.conf"
-SMB_DYNAMIC_CONF="/etc/samba/smb_dynamic.conf"
-NFS_EXPORTS="/etc/exports"
-CONFIG_FILE="/root/.config/nas-share-tui/config"
 EDITOR="vi"  # Por defecto
 
 # === Funciones base ===
@@ -274,13 +150,16 @@ delete_smb_share() {
 
 add_nfs_export() {
     local NFS_ROOT="/mnt/data"
-
-    echo -n "Ruta a exportar vía NFS (ej. /mnt/data): "
+    
+    echo -n "Ruta a exportar vía NFS (/mnt/data o subdir): "
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
     read export_network
 
-    # Evitar duplicados
+    # Limpiar '/' al final si existe (evita errores de duplicados)
+    export_path="${export_path%/}"
+
+    # Verificar si ya existe
     if grep -qE "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS"; then
         echo "[!] Ese export ya existe."
         sleep 1
@@ -288,13 +167,26 @@ add_nfs_export() {
     fi
 
     if [ "$export_path" = "$NFS_ROOT" ]; then
-        options="rw,sync,no_subtree_check,root_squash,fsid=0,crossmnt"
+        # Caso Raíz: fsid=0 y crossmnt
+        options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=0"
         echo "[+] Export NFSv4 root (fsid=0)"
     else
-        options="rw,sync,no_subtree_check,root_squash"
-        echo "[+] Export NFSv4 subdirectorio"
+        # Caso Subdirectorio: nohide y fsid incremental
+        # Buscamos el fsid más alto actual y le sumamos 1
+        local last_fsid=$(grep -o "fsid=[0-9]*" "$NFS_EXPORTS" | cut -d= -f2 | sort -n | tail -1)
+        
+        # Si no hay fsids (archivo vacío), empezamos en 10 (por ejemplo)
+        if [ -z "$last_fsid" ] || [ "$last_fsid" -eq 0 ]; then
+            new_fsid=11
+        else
+            new_fsid=$((last_fsid + 1))
+        fi
+        
+        options="rw,sync,nohide,no_subtree_check,no_root_squash,fsid=$new_fsid"
+        echo "[+] Export NFSv4 subdirectorio (fsid=$new_fsid)"
     fi
 
+    # Escribir en el archivo
     echo "$export_path $export_network($options)" >> "$NFS_EXPORTS"
 
     exportfs -ra
