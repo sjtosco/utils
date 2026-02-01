@@ -149,49 +149,59 @@ delete_smb_share() {
 }
 
 add_nfs_export() {
-    local NFS_ROOT="/mnt/data"
-    
-    echo -n "Ruta a exportar vía NFS (/mnt/data o subdir): "
+    echo -n "Ruta real en Alpine (ej. /mnt/data o /mnt/gitea): "
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
     read export_network
 
-    # Limpiar '/' al final si existe (evita errores de duplicados)
+    # Limpiar barra final
     export_path="${export_path%/}"
 
-    # Verificar si ya existe
+    # Validar que la ruta existe en Alpine para evitar errores de NFS
+    if [ ! -d "$export_path" ]; then
+        echo "[!] Error: La ruta $export_path no existe en la VM."
+        sleep 2
+        return
+    fi
+
+    # Evitar duplicados
     if grep -qE "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS"; then
         echo "[!] Ese export ya existe."
         sleep 1
         return
     fi
 
-    if [ "$export_path" = "$NFS_ROOT" ]; then
-        # Caso Raíz: fsid=0 y crossmnt
-        options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=0"
-        echo "[+] Export NFSv4 root (fsid=0)"
+    # Lógica de fsid: Buscamos el mayor y sumamos 1
+    # Si el archivo está vacío, empezamos en 10
+    local last_fsid=$(grep -o "fsid=[0-9]*" "$NFS_EXPORTS" | cut -d= -f2 | sort -n | tail -1)
+    if [ -z "$last_fsid" ]; then
+        new_fsid=10
     else
-        # Caso Subdirectorio: nohide y fsid incremental
-        # Buscamos el fsid más alto actual y le sumamos 1
-        local last_fsid=$(grep -o "fsid=[0-9]*" "$NFS_EXPORTS" | cut -d= -f2 | sort -n | tail -1)
-        
-        # Si no hay fsids (archivo vacío), empezamos en 10 (por ejemplo)
-        if [ -z "$last_fsid" ] || [ "$last_fsid" -eq 0 ]; then
-            new_fsid=11
-        else
-            new_fsid=$((last_fsid + 1))
-        fi
-        
-        options="rw,sync,nohide,no_subtree_check,no_root_squash,fsid=$new_fsid"
-        echo "[+] Export NFSv4 subdirectorio (fsid=$new_fsid)"
+        new_fsid=$((last_fsid + 1))
     fi
 
-    # Escribir en el archivo
+    # Definir opciones según la jerarquía
+    if [ "$export_path" = "/mnt/data" ]; then
+        # La raíz principal de datos
+        options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=0"
+        echo "[+] Configurando como Root NFSv4 (fsid=0)"
+    elif [[ "$export_path" == "/mnt/data/"* ]]; then
+        # Sub-datasets de datos (necesitan nohide para verse desde la raíz)
+        options="rw,sync,nohide,no_subtree_check,no_root_squash,fsid=$new_fsid"
+        echo "[+] Configurando sub-dataset (nohide, fsid=$new_fsid)"
+    else
+        # Dataset independiente (como /mnt/gitea)
+        options="rw,sync,no_subtree_check,no_root_squash,fsid=$new_fsid"
+        echo "[+] Configurando export independiente (fsid=$new_fsid)"
+    fi
+
+    # Escribir al archivo
     echo "$export_path $export_network($options)" >> "$NFS_EXPORTS"
 
+    # Aplicar cambios
     exportfs -ra
     rc-service nfs restart
-    echo "[+] Export NFS agregado correctamente."
+    echo "[+] Export agregado: $export_path con fsid=$new_fsid"
     sleep 1
 }
 
