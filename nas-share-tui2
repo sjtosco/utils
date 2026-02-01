@@ -149,30 +149,26 @@ delete_smb_share() {
 }
 
 add_nfs_export() {
-    echo -n "Ruta real en Alpine (ej. /mnt/data o /mnt/gitea): "
+    echo -n "Ruta real en Alpine (ej. /mnt/data o /mnt/services): "
     read export_path
     echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
     read export_network
 
-    # Limpiar barra final
     export_path="${export_path%/}"
 
-    # Validar que la ruta existe en Alpine para evitar errores de NFS
     if [ ! -d "$export_path" ]; then
-        echo "[!] Error: La ruta $export_path no existe en la VM."
+        echo "[!] Error: La ruta $export_path no existe."
         sleep 2
         return
     fi
 
-    # Evitar duplicados
     if grep -qE "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS"; then
         echo "[!] Ese export ya existe."
         sleep 1
         return
     fi
 
-    # Lógica de fsid: Buscamos el mayor y sumamos 1
-    # Si el archivo está vacío, empezamos en 10
+    # 1. Lógica de fsid
     local last_fsid=$(grep -o "fsid=[0-9]*" "$NFS_EXPORTS" | cut -d= -f2 | sort -n | tail -1)
     if [ -z "$last_fsid" ]; then
         new_fsid=10
@@ -180,25 +176,44 @@ add_nfs_export() {
         new_fsid=$((last_fsid + 1))
     fi
 
-    # Definir opciones según la jerarquía
-    if [ "$export_path" = "/mnt/data" ]; then
-        # La raíz principal de datos
-        options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=0"
-        echo "[+] Configurando como Root NFSv4 (fsid=0)"
-    elif [[ "$export_path" == "/mnt/data/"* ]]; then
-        # Sub-datasets de datos (necesitan nohide para verse desde la raíz)
-        options="rw,sync,nohide,no_subtree_check,no_root_squash,fsid=$new_fsid"
-        echo "[+] Configurando sub-dataset (nohide, fsid=$new_fsid)"
-    else
-        # Dataset independiente (como /mnt/gitea)
-        options="rw,sync,no_subtree_check,no_root_squash,fsid=$new_fsid"
-        echo "[+] Configurando export independiente (fsid=$new_fsid)"
-    fi
+    # 2. Preguntar por la jerarquía (Reemplaza el chequeo de /mnt/data)
+    echo "¿Este export es una raíz que contiene otros datasets hijos? (ej: /mnt/data)"
+    echo "1) Sí, es una raíz (activar crossmnt)"
+    echo "2) No, es un dataset independiente o un hijo (activar nohide/independiente)"
+    read -p "Opción [1-2]: " hierarchy_opt
 
-    # Escribir al archivo
+    # 3. Determinar si ya existe un fsid=0 global
+    local has_root=$(grep -q "fsid=0" "$NFS_EXPORTS" && echo "yes" || echo "no")
+
+    case $hierarchy_opt in
+        1)
+            if [ "$has_root" = "yes" ]; then
+                echo "[!] Advertencia: Ya existe un fsid=0. Se usará crossmnt con fsid=$new_fsid"
+                options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=$new_fsid"
+            else
+                options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=0"
+                new_fsid=0
+                echo "[+] Establecido como Root NFSv4 (fsid=0)"
+            fi
+            ;;
+        2)
+            # Si el padre de esta ruta está en el archivo de exports, activamos nohide
+            local parent_path=$(dirname "$export_path")
+            if grep -q "$parent_path" "$NFS_EXPORTS"; then
+                options="rw,sync,nohide,no_subtree_check,no_root_squash,fsid=$new_fsid"
+                echo "[+] Detectado como sub-dataset de $parent_path (nohide activado)"
+            else
+                options="rw,sync,no_subtree_check,no_root_squash,fsid=$new_fsid"
+                echo "[+] Configurando como export independiente"
+            fi
+            ;;
+        *)
+            echo "Opción inválida. Cancelando."
+            return
+            ;;
+    esac
+
     echo "$export_path $export_network($options)" >> "$NFS_EXPORTS"
-
-    # Aplicar cambios
     exportfs -ra
     rc-service nfs restart
     echo "[+] Export agregado: $export_path con fsid=$new_fsid"
