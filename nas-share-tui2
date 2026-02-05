@@ -1,45 +1,24 @@
 #!/bin/bash
+# SAMBA config TUI: The easy way ;-)
 
 CONFIG_DIR="/etc/samba/smb.conf.d"
 SMB_CONF_MAIN="/etc/samba/smb.conf"
 SMB_DYNAMIC_CONF="/etc/samba/smb_dynamic.conf"
-NFS_EXPORTS="/etc/exports"
+BACKUP_DIR="/root/samba_backups"
 CONFIG_FILE="/root/.config/nas-share-tui/config"
 EDITOR="vi"  # Por defecto
 
-# === Funciones base ===
-
-show_help() {
-    echo "Uso: $(basename "$0") [opción]"
-    echo
-    echo "Opciones:"
-    echo "  -h, --help      Mostrar esta ayuda"
-    echo
-    echo "Sin argumentos se inicia el menú interactivo."
-    exit 0
-}
-
+# === Inicialización y Configuración ===
 init_config() {
-    mkdir -p "$CONFIG_DIR"
-    if ! grep -Fq "include = $SMB_DYNAMIC_CONF" "$SMB_CONF_MAIN" 2>/dev/null; then
+    mkdir -p "$CONFIG_DIR" "$BACKUP_DIR"
+    grep -Fq "include = $SMB_DYNAMIC_CONF" "$SMB_CONF_MAIN" 2>/dev/null || \
         echo "include = $SMB_DYNAMIC_CONF" >> "$SMB_CONF_MAIN"
-    fi
     [ -f "$SMB_DYNAMIC_CONF" ] || echo "" > "$SMB_DYNAMIC_CONF"
-}
-
-update_dynamic_smb_conf() {
-    if ls "$CONFIG_DIR"/*.conf &>/dev/null; then
-        cat "$CONFIG_DIR"/*.conf > "$SMB_DYNAMIC_CONF"
-    else
-        echo "" > "$SMB_DYNAMIC_CONF"
-    fi
 }
 
 load_config() {
     mkdir -p "$(dirname "$CONFIG_FILE")"
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    fi
+    [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 }
 
 change_editor() {
@@ -60,241 +39,171 @@ change_editor() {
     done
 }
 
-# === Funciones TUI ===
+# === Backup y rollback ===
+backup_dynamic() {
+    cp "$SMB_DYNAMIC_CONF" "$BACKUP_DIR/smb_dynamic.conf.$(date +%Y%m%d%H%M%S)"
+}
 
-list_and_edit_file() {
-    local path=$1
-    local files=($(ls "$path" 2>/dev/null))
-    if [ ${#files[@]} -eq 0 ]; then
-        echo "No hay archivos para editar en $path."
+rollback_dynamic() {
+    latest=$(ls -t "$BACKUP_DIR"/smb_dynamic.conf.* 2>/dev/null | head -n1)
+    if [ -n "$latest" ]; then
+        cp "$latest" "$SMB_DYNAMIC_CONF"
+        rc-service samba restart
+        echo "[+] Rollback aplicado desde $latest"
+    else
+        echo "[!] No hay backups para rollback."
+    fi
+    sleep 1
+}
+
+reload_samba() {
+    echo "[*] Verificando configuración con testparm..."
+    if testparm -s "$SMB_DYNAMIC_CONF" &>/dev/null; then
+        rc-service samba restart
+        echo "[+] Samba reiniciado OK."
+    else
+        echo "[!] Error de configuración. Revertiendo..."
+        rollback_dynamic
+    fi
+    sleep 1
+}
+
+update_dynamic_smb_conf() {
+    backup_dynamic
+    if ls "$CONFIG_DIR"/*.conf &>/dev/null; then
+        cat "$CONFIG_DIR"/*.conf > "$SMB_DYNAMIC_CONF"
+    else
+        echo "" > "$SMB_DYNAMIC_CONF"
+    fi
+}
+
+# === Validaciones ===
+valid_share_name() {
+    [[ "$1" =~ ^[a-zA-Z0-9._-]+$ ]]
+}
+
+samba_user_exists() {
+    local user="$1"
+    pdbedit -L | awk -F: '{print $1}' | grep -q "^$user$"
+}
+
+# === Gestión de Shares ===
+add_smb_share() {
+    read -p "Nombre del share SMB: " share_name
+    if ! valid_share_name "$share_name"; then
+        echo "Nombre inválido (solo alfanuméricos, puntos, guiones, underline)."
         sleep 1
         return
     fi
-    echo "Archivos en: $path"
-    select file in "${files[@]}" "Cancelar"; do
-        if [[ "$file" == "Cancelar" ]]; then
-            break
-        elif [ "$file" ]; then
-            $EDITOR "$path/$file"
-            update_dynamic_smb_conf
-            rc-service samba restart
-            break
-        else
-            echo "Opción inválida."
-        fi
-    done
-}
 
-add_smb_share() {
-    echo -n "Nombre del share SMB: "
-    read share_name
-    echo -n "Ruta del directorio a compartir: "
-    read share_path
+    read -p "Ruta absoluta del directorio: " share_path
+    if [[ ! -d "$share_path" ]]; then
+        echo "La ruta no existe o no es directorio."
+        sleep 1
+        return
+    fi
 
     cat <<EOF > "$CONFIG_DIR/$share_name.conf"
 [$share_name]
    path = $share_path
-   public = no
    browseable = yes
    read only = no
    guest ok = no
    create mask = 0775
    directory mask = 2775
-   force user = nas
-   force group = nas
-   veto files = 
-   hide files = 
 EOF
 
     update_dynamic_smb_conf
-    rc-service samba restart
+    reload_samba
     echo "[+] Share SMB '$share_name' creado."
     sleep 1
 }
 
-edit_smb_share() {
-    list_and_edit_file "$CONFIG_DIR"
+list_and_edit_smb() {
+    local files=($(ls "$CONFIG_DIR" 2>/dev/null))
+    [ ${#files[@]} -eq 0 ] && echo "No hay shares para editar." && sleep 1 && return
+
+    echo "Selecciona share a editar:"
+    select file in "${files[@]}" "Cancelar"; do
+        [[ "$file" == "Cancelar" || -z "$file" ]] && break
+        $EDITOR "$CONFIG_DIR/$file"
+        update_dynamic_smb_conf
+        reload_samba
+        break
+    done
 }
 
 delete_smb_share() {
     local files=($(ls "$CONFIG_DIR" 2>/dev/null))
-    if [ ${#files[@]} -eq 0 ]; then
-        echo "No hay shares SMB para borrar."
-        sleep 1
-        return
-    fi
+    [ ${#files[@]} -eq 0 ] && echo "Nada que borrar." && sleep 1 && return
 
-    echo "Selecciona el share SMB a borrar:"
     select file in "${files[@]}" "Cancelar"; do
-        if [[ "$file" == "Cancelar" ]]; then
-            break
-        elif [ "$file" ]; then
-            echo -n "¿Seguro que deseas borrar el share '$file'? [s/N]: "
-            read confirm
-            if [[ "$confirm" =~ ^[sS]$ ]]; then
-                rm -f "$CONFIG_DIR/$file"
-                update_dynamic_smb_conf
-                rc-service samba restart
-                echo "Share SMB '$file' borrado y samba reiniciado."
-                sleep 1
-            else
-                echo "Cancelado."
-                sleep 1
-            fi
-            break
-        else
-            echo "Opción inválida."
-        fi
+        [[ "$file" == "Cancelar" || -z "$file" ]] && break
+        rm -f "$CONFIG_DIR/$file"
+        update_dynamic_smb_conf
+        reload_samba
+        echo "[+] Share borrado."
+        break
     done
+    sleep 1
 }
 
-add_nfs_export() {
-    echo -n "Ruta real en Alpine (ej. /mnt/data o /mnt/services): "
-    read export_path
-    echo -n "Red/IP permitida (ej. 192.168.88.0/24): "
-    read export_network
-
-    export_path="${export_path%/}"
-
-    if [ ! -d "$export_path" ]; then
-        echo "[!] Error: La ruta $export_path no existe."
-        sleep 2
-        return
-    fi
-
-    if grep -qE "^[[:space:]]*$export_path[[:space:]]" "$NFS_EXPORTS"; then
-        echo "[!] Ese export ya existe."
+# === Gestión de Usuarios Samba ===
+add_samba_user() {
+    read -p "Nombre de usuario del sistema a agregar: " user
+    if ! id "$user" &>/dev/null; then
+        echo "Usuario del sistema no existe."
         sleep 1
         return
     fi
-
-    # 1. Lógica de fsid
-    local last_fsid=$(grep -o "fsid=[0-9]*" "$NFS_EXPORTS" | cut -d= -f2 | sort -n | tail -1)
-    if [ -z "$last_fsid" ]; then
-        new_fsid=10
-    else
-        new_fsid=$((last_fsid + 1))
+    if samba_user_exists "$user"; then
+        echo "El usuario Samba '$user' ya existe."
+        sleep 1
+        return
     fi
-
-    # 2. Preguntar por la jerarquía (Reemplaza el chequeo de /mnt/data)
-    echo "¿Este export es una raíz que contiene otros datasets hijos? (ej: /mnt/data)"
-    echo "1) Sí, es una raíz (activar crossmnt)"
-    echo "2) No, es un dataset independiente o un hijo (activar nohide/independiente)"
-    read -p "Opción [1-2]: " hierarchy_opt
-
-    # 3. Determinar si ya existe un fsid=0 global
-    local has_root=$(grep -q "fsid=0" "$NFS_EXPORTS" && echo "yes" || echo "no")
-
-    case $hierarchy_opt in
-        1)
-            if [ "$has_root" = "yes" ]; then
-                echo "[!] Advertencia: Ya existe un fsid=0. Se usará crossmnt con fsid=$new_fsid"
-                options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=$new_fsid"
-            else
-                options="rw,sync,crossmnt,no_subtree_check,no_root_squash,fsid=0"
-                new_fsid=0
-                echo "[+] Establecido como Root NFSv4 (fsid=0)"
-            fi
-            ;;
-        2)
-            # Si el padre de esta ruta está en el archivo de exports, activamos nohide
-            local parent_path=$(dirname "$export_path")
-            if grep -q "$parent_path" "$NFS_EXPORTS"; then
-                options="rw,sync,nohide,no_subtree_check,no_root_squash,fsid=$new_fsid"
-                echo "[+] Detectado como sub-dataset de $parent_path (nohide activado)"
-            else
-                options="rw,sync,no_subtree_check,no_root_squash,fsid=$new_fsid"
-                echo "[+] Configurando como export independiente"
-            fi
-            ;;
-        *)
-            echo "Opción inválida. Cancelando."
-            return
-            ;;
-    esac
-
-    echo "$export_path $export_network($options)" >> "$NFS_EXPORTS"
-    exportfs -ra
-    rc-service nfs restart
-    echo "[+] Export agregado: $export_path con fsid=$new_fsid"
+    smbpasswd -a "$user"
+    echo "[+] Usuario '$user' agregado a Samba."
     sleep 1
 }
 
-edit_nfs_exports() {
-    $EDITOR "$NFS_EXPORTS"
-    exportfs -ra
-    rc-service nfs restart
+delete_samba_user() {
+    read -p "Usuario Samba a eliminar: " user
+    if samba_user_exists "$user"; then
+        smbpasswd -x "$user"
+        echo "[+] Usuario Samba '$user' eliminado."
+    else
+        echo "[!] El usuario Samba '$user' no existe."
+    fi
     sleep 1
 }
 
-check_service_status() {
-    local svc=$1
-    local run_status enabled_status
+list_samba_users() {
+    echo "Usuarios Samba registrados:"
+    pdbedit -L
+    read -p "Presiona Enter para continuar..."
+}
 
-    if rc-service "$svc" status | grep -q "started"; then
-        run_status="en ejecución"
+change_samba_password() {
+    read -p "Usuario para cambiar contraseña Samba: " user
+    if samba_user_exists "$user"; then
+        smbpasswd "$user"
+        echo "[+] Contraseña del usuario '$user' actualizada."
     else
-        run_status="detenido"
+        echo "[!] El usuario Samba '$user' no existe."
     fi
-
-    if rc-update show | awk -v svc="$svc" '$1 == svc && $3 == "default"' | grep -q .; then
-        enabled_status="habilitado"
-    else
-        enabled_status="deshabilitado"
-    fi
-
-    echo "- $svc: $run_status, inicio $enabled_status"
+    sleep 1
 }
 
-service_status() {
-    echo "Estado de servicios:"
-    check_service_status samba
-    check_service_status nfs
-    echo
-    read -rp "Presiona Enter para continuar..."
+# === Utilidades ===
+show_samba_status() {
+    rc-service samba status
+    read -p "Presiona Enter para continuar..."
 }
 
-service_control() {
-    echo "Selecciona el servicio:"
-    select svc in "samba" "nfs" "Volver"; do
-        case $svc in
-            "samba"|"nfs")
-                echo "Control de $svc:"
-                select action in "Iniciar" "Detener" "Reiniciar" "Habilitar inicio" "Deshabilitar inicio" "Volver"; do
-                    case $action in
-                        "Iniciar") rc-service $svc start ;;
-                        "Detener") rc-service $svc stop ;;
-                        "Reiniciar") rc-service $svc restart ;;
-                        "Habilitar inicio") rc-update add $svc default ;;
-                        "Deshabilitar inicio") rc-update del $svc default ;;
-                        "Volver") break ;;
-                        *) echo "Opción inválida" ;;
-                    esac
-                    sleep 1
-                done
-                ;;
-            "Volver") break ;;
-            *) echo "Opción inválida" ;;
-        esac
-    done
-}
-
-service_menu() {
-    while true; do
-        clear
-        echo "=== Administración de Servicios ==="
-        echo "1) Estado servicios"
-        echo "2) Control por servicio"
-        echo "3) Volver"
-        echo -n "Opción [1-3]: "
-        read opt
-        case $opt in
-            1) service_status ;;
-            2) service_control ;;
-            3) break ;;
-            *) echo "Opción inválida" && sleep 1 ;;
-        esac
-    done
+restart_samba() {
+    rc-service samba restart
+    echo "[+] Samba reiniciado."
+    sleep 1
 }
 
 launch_glances() {
@@ -303,49 +212,60 @@ launch_glances() {
         read -rp "Presiona Enter para continuar..."
         return
     }
-
     echo "Presiona 'q' para salir de Glances y volver al menú."
     sleep 1
     glances
 }
 
+# === Menú principal simplificado ===
 main_menu() {
     while true; do
         clear
-        echo "=== NAS Share TUI Admin ==="
+        echo "=== NAS SMB Admin ==="
         echo "Editor por defecto: $EDITOR"
         echo
-        echo "1) Agregar share SMB"
-        echo "2) Editar share SMB"
-        echo "3) Borrar share SMB"
-        echo "4) Agregar export NFS"
-        echo "5) Editar exports NFS"
-        echo "6) Administración servicios"
-        echo "7) Ver estado del sistema (Glances)"
-        echo "8) Cambiar editor por defecto"
-        echo "9) Salir"
-        echo -n "Opción [1-9]: "
-        read opt
+        echo "--- Shares ---"
+        echo "1) Agregar share"
+        echo "2) Editar share"
+        echo "3) Borrar share"
+        echo
+        echo "--- Usuarios ---"
+        echo "4) Listar usuarios"
+        echo "5) Agregar usuario"
+        echo "6) Borrar usuario"
+        echo "7) Cambiar contraseña"
+        echo
+        echo "--- Utilidades ---"
+        echo "8) Ver estado Samba"
+        echo "9) Reiniciar Samba"
+        echo "10) Ver estado del sistema (Glances)"
+        echo "11) Cambiar editor por defecto"
+        echo "12) Salir"
+        read -p "Opción [1-12]: " opt
         case $opt in
             1) add_smb_share ;;
-            2) edit_smb_share ;;
+            2) list_and_edit_smb ;;
             3) delete_smb_share ;;
-            4) add_nfs_export ;;
-            5) edit_nfs_exports ;;
-            6) service_menu ;;
-            7) launch_glances ;;
-            8) change_editor ;;
-            9) exit 0 ;;
+            4) list_samba_users ;;
+            5) add_samba_user ;;
+            6) delete_samba_user ;;
+            7) change_samba_password ;;
+            8) show_samba_status ;;
+            9) restart_samba ;;
+            10) launch_glances ;;
+            11) change_editor ;;
+            12) exit 0 ;;
             *) echo "Opción inválida" && sleep 1 ;;
         esac
     done
 }
 
 # === Ejecución principal ===
-
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    show_help
-fi
+[ "$1" = "-h" ] || [ "$1" = "--help" ] && {
+    echo "Uso: $(basename "$0")"
+    echo "Menú interactivo para administrar SMB y usuarios Samba"
+    exit 0
+}
 
 init_config
 load_config
