@@ -111,6 +111,8 @@ add_smb_share() {
    guest ok = no
    create mask = 0775
    directory mask = 2775
+   force user = root
+   force group = root
 EOF
 
     update_dynamic_smb_conf
