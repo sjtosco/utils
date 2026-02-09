@@ -224,15 +224,19 @@ restart_samba() {
     sleep 1
 }
 
-launch_glances() {
-    command -v glances >/dev/null 2>&1 || {
-        echo "Glances no está instalado. Usa: apk add py3-pip && pip install glances"
-        read -rp "Presiona Enter para continuar..."
-        return
-    }
-    echo "Presiona 'q' para salir de Glances y volver al menú."
+launch_monitor() {
+    # Verificar si btop está instalado, si no, lo instala (en Alpine es rápido)
+    if ! command -v btop >/dev/null 2>&1; then
+        echo "[*] Instalando btop..."
+        apk add btop >/dev/null 2>&1
+    fi
+
+    # Lanzar btop
+    # Usamos btop porque es nativo (C++), no usa Python y lee mejor los Cgroups
+    btop
+
+    echo "[*] Volviendo al menú principal..."
     sleep 1
-    glances
 }
 
 # === Menú principal ===
@@ -258,7 +262,7 @@ main_menu() {
         echo "9) Reiniciar Samba"
         echo "10) Habilitar Samba"
         echo "11) Deshabilitar Samba"
-        echo "12) Ver estado del sistema (Glances)"
+        echo "12) Ver estado del sistema (btop)"
         echo "13) Cambiar editor por defecto"
         echo "14) Salir"
         read -p "Opción [1-14]: " opt
@@ -274,7 +278,7 @@ main_menu() {
             9) restart_samba ;;
             10) enable_samba ;;
             11) disable_samba ;;
-            12) launch_glances ;;
+            12) launch_monitor ;;
             13) change_editor ;;
             14) exit 0 ;;
             *) echo "Opción inválida" && sleep 1 ;;
