@@ -17,7 +17,7 @@ sudo apt install -y --no-install-recommends docker-compose
 systemctl --user enable --now podman.socket
 
 # 4. Enlazar docker-compose con el socket de Podman
-echo 'export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"' >> ~/.bashrc
+echo -e '# podman\nexport DOCKER_HOST="unix://\$XDG_RUNTIME_DIR/podman/podman.sock"' >> ~/.bashrc
 
 # 5. Aplicar cambios en la terminal actual
 source ~/.bashrc
