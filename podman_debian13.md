@@ -21,6 +21,10 @@ echo -e '# podman\nexport DOCKER_HOST="unix://\$XDG_RUNTIME_DIR/podman/podman.so
 
 # 5. Aplicar cambios en la terminal actual
 source ~/.bashrc
+
+# 6. Configurar los repositorios de imágenes por defecto para Podman
+sudo short-name-aliases=disabled bash -c 'echo -e "[registries.search]\nregistries = ['\''docker.io'\'', '\''quay.io'\'']" > /etc/containers/registries.conf'
+
 ```
 
 ## 2. Verificación del Entorno
