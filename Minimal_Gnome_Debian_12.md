@@ -1,3 +1,29 @@
+# Debian 13
+
+En las versiones más recientes de systemd (como la que incluye Debian 13), los scripts en system-sleep a veces se ejecutan de forma asíncrona o demasiado pronto, ignorando el comando antes de que los módulos de energía de la laptop se hayan despertado del todo.
+
+Si notas que el script de arriba falla o es inestable, la forma moderna y robusta de hacerlo en Debian 13 es mediante un servicio de systemd dedicado. Se hace así de fácil:
+
+1. Crea este archivo: `sudo nano /etc/systemd/system/touchpad-resume.service`
+2. Pega el siguiente contenido:
+   ```
+   [Unit]
+   Description=Reiniciar touchpad Asus tras suspender
+   After=suspend.target
+
+   [Service]
+   Type=oneshot
+   ExecStartPre=/usr/bin/sleep 1
+   ExecStart=/sbin/modprobe -r i2c-hid-acpi
+   ExecStartPost=/sbin/modprobe i2c-hid-acpi
+
+   [Install]
+   WantedBy=suspend.target
+   ```
+   
+3. Guarda, sal y activa el servicio con: `sudo systemctl enable touchpad-resume.service`
+   
+
 # Debian 12 Minimal Gnome Shell
 
 ## Prerequisites
