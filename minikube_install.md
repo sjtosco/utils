@@ -17,55 +17,73 @@ If validation is OK, install:
 ## PAra podman
 
 ```
+# ==========================================
+# 1. PREPARACIÓN DEL ENTORNO (ROOTLESS)
+# ==========================================
+# Asegurar que las carpetas locales existan antes de mover archivos
+mkdir -p ~/.local/bin
+mkdir -p ~/.local/share/bash-completion/completions/
+
+# ==========================================
+# 2. INSTALACIÓN DE KUBECTL
+# ==========================================
+# Instalar el binario de kubectl que ya tienes descargado
 install -m 0755 kubectl ~/.local/bin/kubectl
-echo -e '# kubectl\nexport PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-# 1. Descarcar kubecolor
+
+# ==========================================
+# 3. INSTALACIÓN DE KUBECOLOR
+# ==========================================
+# Descargar kubecolor
 wget https://github.com/kubecolor/kubecolor/releases/download/v0.6.0/kubecolor_0.6.0_linux_amd64.tar.gz
-# 2. Descomprimir el archivo (cambia el nombre por el de la versión que bajaste)
+
+# Descomprimir el archivo
 tar -xvf kubecolor_*.tar.gz
 
-# 3. Instalar el binario en tu carpeta personal con permisos de ejecución
+# Instalar el binario en tu carpeta personal con permisos de ejecución
 install -m 0755 kubecolor ~/.local/bin/kubecolor
-# 4. Limpiar
+
+# Limpiar archivos temporales de kubecolor
 rm *.tar.gz
 rm kubecolor kubectl* LICENSE README.md
 
+# ==========================================
+# 4. INSTALACIÓN DE KIND
+# ==========================================
+# Detectar arquitectura y descargar la versión correcta de Kind (v0.31.0)
+[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
+[ $(uname -m) = aarch64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-arm64
+
+# Dar permisos de ejecución e instalar en tu espacio de usuario
+install -m 0755 ./kind ~/.local/bin/kind
+
+# Limpiar el binario temporal de kind
+rm ./kind
+
+# ==========================================
+# 5. GENERACIÓN DE AUTOCOMPLETADOS
+# ==========================================
+# Generar autocompletado de kubectl
+kubectl completion bash > ~/.local/share/bash-completion/completions/kubectl
+
+# Generar el script de autocompletado de kind
+kind completion bash > ~/.local/share/bash-completion/completions/kind
+
+# ==========================================
+# 6. CONFIGURACIÓN FINAL DE BASH
+# ==========================================
+# Agregar variables, alias y el autocompletado para el alias al .bashrc
 cat << 'EOF' >> ~/.bashrc
 
 # Configuracion de Kubernetes y Kubecolor (Rootless)
 export PATH="$HOME/.local/bin:$PATH"
 export KUBECOLOR_LIGHT_BACKGROUND=true
+alias kubectl="kubecolor"
 EOF
-
-# Generar autocompletado de kubectl
-kubectl completion bash > ~/.local/share/bash-completion/completions/kubectl
 
 # Forzar a Bash a que aplique el mismo autocompletado de kubectl a tu alias "kubecolor"
 echo 'complete -F __start_kubectl kubecolor' >> ~/.bashrc
-source ~/.bashrc
 
-# 1. Detectar arquitectura y descargar la versión correcta de Kind (v0.31.0)
-[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
-[ $(uname -m) = aarch64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-arm64
-
-# 2. Asegurar que la carpeta bin local existe
-mkdir -p ~/.local/bin
-
-# 3. Dar permisos de ejecución e instalar en tu espacio de usuario (sin sudo)
-install -m 0755 ./kind ~/.local/bin/kind
-
-# 4. Limpiar el binario temporal que quedó en la carpeta actual
-rm ./kind
-
-# 1. Crear la carpeta de autocompletado para tu usuario si no existe
-mkdir -p ~/.local/share/bash-completion/completions/
-
-# 2. Generar el script de autocompletado de kind directamente ahí
-kind completion bash > ~/.local/share/bash-completion/completions/kind
-
-# 3. Recargar tu terminal para aplicar los cambios de inmediato
-source ~/.bashrc
-
+# Recargar tu terminal para aplicar todos los cambios de inmediato
 source ~/.bashrc
 ```
 
