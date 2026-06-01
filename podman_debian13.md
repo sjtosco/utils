@@ -55,21 +55,25 @@ Copia únicamente las líneas que correspondan a las extensiones que tengas inst
 
 ```json
 {
-  // ====================================================================
-  // REQUERIDO PARA: Extensión de Docker (ms-azuretools.vscode-docker)
-  // Permite ver y gestionar contenedores/imágenes desde el panel lateral
+   // ====================================================================
+  // 1. MOTOR BASE Y ENTORNO GLOBAL DE CONTENEDORES (Microsoft Container Tools)
+  // Define las variables y rutas del socket nativo rootless de tu Podman
   // ====================================================================
   "docker.dockerPath": "podman",
-  "docker.environment": {
+  "containers.containerClient": "com.microsoft.visualstudio.containers.podman",
+  "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.podmancompose",
+  "containers.environment": {
     "DOCKER_HOST": "unix:///run/user/1000/podman/podman.sock"
   },
 
   // ====================================================================
-  // REQUERIDO PARA: Extensión de Dev Containers (ms-vscode-remote.remote-containers)
-  // Permite abrir y desarrollar proyectos de código dentro de un contenedor
+  // 2. CONFIGURACIÓN DE DEV CONTAINERS (ms-vscode-remote.remote-containers)
+  // Mapeo simétrico para desarrollo aislado basado en tu docker-compose limpio
   // ====================================================================
   "dev.containers.dockerPath": "podman",
-  "dev.containers.dockerComposePath": "podman-compose"
+  "dev.containers.dockerComposePath": "podman",
+  "dev.containers.dockerSocketPath": "/run/user/1000/podman/podman.sock"
+
 }
 ```
 
