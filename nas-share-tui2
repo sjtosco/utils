@@ -63,6 +63,35 @@ toggle_samba_boot() {
     sleep 1.5
 }
 
+# === Mostrar Estado de Servicio y Boot ===
+show_status() {
+    echo "========================================="
+    echo "       ESTADO DEL SERVICIO SAMBA         "
+    echo "========================================="
+    
+    # 1. Estado en tiempo real (Proceso)
+    echo -n " Proceso: "
+    if rc-service samba status >/dev/null 2>&1; then
+        echo -e "\e[32mEJECUTÁNDOSE (Started)\e[0m"
+    else
+        echo -e "\e[31mDETENIDO (Stopped)\e[0m"
+    fi
+
+    # 2. Estado del arranque (Boot)
+    echo -n " Inicio automático (Boot): "
+    if rc-update show default | grep -q "samba"; then
+        echo -e "\e[32mHABILITADO (Enabled)\e[0m"
+    else
+        echo -e "\e[33mDESHABILITADO (Disabled)\e[0m"
+    fi
+    echo "========================================="
+    echo ""
+    # Muestra los detalles técnicos nativos de openrc abajo por si acaso
+    rc-service samba status
+    echo ""
+    read -p "Presiona Enter para continuar..."
+}
+
 # === Backup y rollback ===
 backup_dynamic() {
     cp "$SMB_DYNAMIC_CONF" "$BACKUP_DIR/smb_dynamic.conf.$(date +%Y%m%d%H%M%S)"
@@ -122,13 +151,10 @@ add_smb_share() {
 
     local share_path
     if [[ -z "$input_path" ]]; then
-        # Toma directo la raíz sin agregarle nada al final
         share_path="/srv/data/"
     elif [[ "$input_path" == /* ]]; then
-        # Usa exactamente la ruta absoluta proporcionada
         share_path="$input_path"
     else
-        # Si pones una carpeta relativa (ej: media), la busca directo en la raíz
         share_path="/srv/data/$input_path"
     fi
 
@@ -241,7 +267,7 @@ main_menu() {
             2) list_and_edit_smb ;;
             3) delete_smb_share ;;
             4) change_root_password ;;
-            5) rc-service samba status; echo ""; read -p "Presiona Enter para continuar..." ;;
+            5) show_status ;;
             6) rc-service samba restart; echo "[+] Reiniciado."; sleep 1 ;;
             7) toggle_samba_boot ;;
             8) launch_monitor ;;
