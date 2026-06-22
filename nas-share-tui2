@@ -1,12 +1,12 @@
 #!/bin/bash
-# SAMBA config TUI: The easy way ;-)
+# NAS SMB Admin - Versión Simplificada para LXC Unprivileged en Alpine
 
 CONFIG_DIR="/etc/samba/smb.conf.d"
 SMB_CONF_MAIN="/etc/samba/smb.conf"
 SMB_DYNAMIC_CONF="/etc/samba/smb_dynamic.conf"
 BACKUP_DIR="/root/samba_backups"
 CONFIG_FILE="/root/.config/nas-share-tui/config"
-EDITOR="vi"  # Por defecto
+EDITOR="vi" # 'vi' por defecto
 
 # === Inicialización y Configuración ===
 init_config() {
@@ -22,19 +22,19 @@ load_config() {
 }
 
 change_editor() {
-    echo "Selecciona editor por defecto:"
-    select choice in "nano" "vi" "Cancelar"; do
+    echo "--- Selecciona editor por defecto ---"
+    select choice in "vi" "nano" "Cancelar"; do
         case "$choice" in
-            nano|vi)
+            vi|nano)
                 EDITOR="$choice"
                 mkdir -p "$(dirname "$CONFIG_FILE")"
                 echo "EDITOR=\"$EDITOR\"" > "$CONFIG_FILE"
-                echo "Editor establecido a '$EDITOR'."
+                echo "[+] Editor establecido a '$EDITOR'."
                 sleep 1
                 break
                 ;;
             "Cancelar") break ;;
-            *) echo "Opción inválida." ;;
+            *) echo "[!] Opción inválida." ;;
         esac
     done
 }
@@ -45,10 +45,11 @@ backup_dynamic() {
 }
 
 rollback_dynamic() {
+    # Fix Alpine: ls -t funciona nativamente en BusyBox/Alpine para orden cronológico
     latest=$(ls -t "$BACKUP_DIR"/smb_dynamic.conf.* 2>/dev/null | head -n1)
     if [ -n "$latest" ]; then
         cp "$latest" "$SMB_DYNAMIC_CONF"
-        rc-service samba restart
+        rc-service samba restart >/dev/null 2>&1
         echo "[+] Rollback aplicado desde $latest"
     else
         echo "[!] No hay backups para rollback."
@@ -58,8 +59,9 @@ rollback_dynamic() {
 
 reload_samba() {
     echo "[*] Verificando configuración con testparm..."
-    if testparm -s "$SMB_DYNAMIC_CONF" &>/dev/null; then
-        rc-service samba restart
+    # Corrección de redirección limpia para Alpine Linux
+    if testparm -s "$SMB_DYNAMIC_CONF" >/dev/null 2>&1; then
+        rc-service samba restart >/dev/null 2>&1
         echo "[+] Samba reiniciado OK."
     else
         echo "[!] Error de configuración. Revertiendo..."
@@ -70,7 +72,8 @@ reload_samba() {
 
 update_dynamic_smb_conf() {
     backup_dynamic
-    if ls "$CONFIG_DIR"/*.conf &>/dev/null; then
+    # Comprobación segura de existencia de archivos .conf
+    if count=$(ls "$CONFIG_DIR"/*.conf 2>/dev/null) && [ -n "$count" ]; then
         cat "$CONFIG_DIR"/*.conf > "$SMB_DYNAMIC_CONF"
     else
         echo "" > "$SMB_DYNAMIC_CONF"
@@ -82,25 +85,23 @@ valid_share_name() {
     [[ "$1" =~ ^[a-zA-Z0-9._-]+$ ]]
 }
 
-samba_user_exists() {
-    local user="$1"
-    pdbedit -L | awk -F: '{print $1}' | grep -q "^$user$"
-}
-
 # === Gestión de Shares ===
 add_smb_share() {
-    read -p "Nombre del share SMB: " share_name
+    echo "--- Crear Nuevo Share ---"
+    read -p "Nombre del share (Ej: media, documents): " share_name
     if ! valid_share_name "$share_name"; then
-        echo "Nombre inválido (solo alfanuméricos, puntos, guiones, underline)."
+        echo "[!] Nombre inválido."
         sleep 1
         return
     fi
 
-    read -p "Ruta absoluta del directorio: " share_path
+    # Ajustado a /srv/data/ para coincidir exactamente con la raíz de tu bindmount
+    read -p "Ruta relativa dentro de /srv/data/ (Ej: subcarpeta): " sub_path
+    local share_path="/srv/data/$sub_path"
+
     if [[ ! -d "$share_path" ]]; then
-        echo "La ruta no existe o no es directorio."
-        sleep 1
-        return
+        echo "[*] La ruta no existe. Creándola en: $share_path"
+        mkdir -p "$share_path"
     fi
 
     cat <<EOF > "$CONFIG_DIR/$share_name.conf"
@@ -118,15 +119,19 @@ EOF
 
     update_dynamic_smb_conf
     reload_samba
-    echo "[+] Share SMB '$share_name' creado."
-    sleep 1
+    echo "[+] Share SMB '$share_name' creado exitosamente."
+    sleep 1.5
 }
 
 list_and_edit_smb() {
     local files=($(ls "$CONFIG_DIR" 2>/dev/null))
-    [ ${#files[@]} -eq 0 ] && echo "No hay shares para editar." && sleep 1 && return
+    if [ ${#files[@]} -eq 0 ]; then
+        echo "No hay shares para editar."
+        sleep 1
+        return
+    fi
 
-    echo "Selecciona share a editar:"
+    echo "--- Selecciona share a editar ---"
     select file in "${files[@]}" "Cancelar"; do
         [[ "$file" == "Cancelar" || -z "$file" ]] && break
         $EDITOR "$CONFIG_DIR/$file"
@@ -138,8 +143,13 @@ list_and_edit_smb() {
 
 delete_smb_share() {
     local files=($(ls "$CONFIG_DIR" 2>/dev/null))
-    [ ${#files[@]} -eq 0 ] && echo "Nada que borrar." && sleep 1 && return
+    if [ ${#files[@]} -eq 0 ]; then
+        echo "Nada que borrar."
+        sleep 1
+        return
+    fi
 
+    echo "--- Selecciona share a ELIMINAR ---"
     select file in "${files[@]}" "Cancelar"; do
         [[ "$file" == "Cancelar" || -z "$file" ]] && break
         rm -f "$CONFIG_DIR/$file"
@@ -151,146 +161,59 @@ delete_smb_share() {
     sleep 1
 }
 
-# === Gestión de Usuarios Samba ===
-add_samba_user() {
-    read -p "Nombre de usuario del sistema a agregar: " user
-    if ! id "$user" &>/dev/null; then
-        echo "Usuario del sistema no existe."
-        sleep 1
-        return
-    fi
-    if samba_user_exists "$user"; then
-        echo "El usuario Samba '$user' ya existe."
-        sleep 1
-        return
-    fi
-    smbpasswd -a "$user"
-    echo "[+] Usuario '$user' agregado a Samba."
-    sleep 1
-}
-
-delete_samba_user() {
-    read -p "Usuario Samba a eliminar: " user
-    if samba_user_exists "$user"; then
-        smbpasswd -x "$user"
-        echo "[+] Usuario Samba '$user' eliminado."
-    else
-        echo "[!] El usuario Samba '$user' no existe."
-    fi
-    sleep 1
-}
-
-list_samba_users() {
-    echo "Usuarios Samba registrados:"
-    pdbedit -L
-    read -p "Presiona Enter para continuar..."
-}
-
-change_samba_password() {
-    read -p "Usuario para cambiar contraseña Samba: " user
-    if samba_user_exists "$user"; then
-        smbpasswd "$user"
-        echo "[+] Contraseña del usuario '$user' actualizada."
-    else
-        echo "[!] El usuario Samba '$user' no existe."
-    fi
-    sleep 1
-}
-
-# === Gestión de Samba (habilitar/deshabilitar) ===
-enable_samba() {
-    rc-update add samba
-    rc-service samba start
-    echo "[+] Samba habilitado y arrancado."
-    sleep 1
-}
-
-disable_samba() {
-    rc-service samba stop
-    rc-update del samba
-    echo "[+] Samba detenido y deshabilitado."
-    sleep 1
+# === Gestión de Contraseña ===
+change_root_password() {
+    echo "--- Cambiar contraseña de root para acceder al NAS ---"
+    smbpasswd root
+    echo "[+] Contraseña de root actualizada en Samba."
+    sleep 1.5
 }
 
 # === Utilidades ===
-show_samba_status() {
-    rc-service samba status
-    read -p "Presiona Enter para continuar..."
-}
-
-restart_samba() {
-    rc-service samba restart
-    echo "[+] Samba reiniciado."
-    sleep 1
-}
-
 launch_monitor() {
-    # Verificar si btop está instalado, si no, lo instala (en Alpine es rápido)
     if ! command -v btop >/dev/null 2>&1; then
         echo "[*] Instalando btop..."
         apk add btop >/dev/null 2>&1
     fi
-
-    # Lanzar btop
-    # Usamos btop porque es nativo (C++), no usa Python y lee mejor los Cgroups
     btop
-
-    echo "[*] Volviendo al menú principal..."
-    sleep 1
 }
 
 # === Menú principal ===
 main_menu() {
     while true; do
         clear
-        echo "=== NAS SMB Admin ==="
-        echo "Editor por defecto: $EDITOR"
-        echo
-        echo "--- Shares ---"
-        echo "1) Agregar share"
-        echo "2) Editar share"
-        echo "3) Borrar share"
-        echo
-        echo "--- Usuarios ---"
-        echo "4) Listar usuarios"
-        echo "5) Agregar usuario"
-        echo "6) Borrar usuario"
-        echo "7) Cambiar contraseña"
-        echo
-        echo "--- Utilidades ---"
-        echo "8) Ver estado Samba"
-        echo "9) Reiniciar Samba"
-        echo "10) Habilitar Samba"
-        echo "11) Deshabilitar Samba"
-        echo "12) Ver estado del sistema (btop)"
-        echo "13) Cambiar editor por defecto"
-        echo "14) Salir"
-        read -p "Opción [1-14]: " opt
+        echo "========================================="
+        echo "            NAS SMB ADMIN (LXC)           "
+        echo "========================================="
+        echo " Almacenamiento raíz: /srv/data/         "
+        echo " Editor activo: $EDITOR                  "
+        echo "========================================="
+        echo "  1) Agregar nuevo share"
+        echo "  2) Editar share existente"
+        echo "  3) Borrar share"
+        echo "-----------------------------------------"
+        echo "  4) Cambiar contraseña de acceso (root)"
+        echo "-----------------------------------------"
+        echo "  5) Ver estado del servicio Samba"
+        echo "  6) Reiniciar servicio Samba"
+        echo "  7) Ver monitor del sistema (btop)"
+        echo "  8) Cambiar editor por defecto"
+        echo "  9) Salir"
+        echo "========================================="
+        read -p "Opción [1-9]: " opt
         case $opt in
             1) add_smb_share ;;
             2) list_and_edit_smb ;;
             3) delete_smb_share ;;
-            4) list_samba_users ;;
-            5) add_samba_user ;;
-            6) delete_samba_user ;;
-            7) change_samba_password ;;
-            8) show_samba_status ;;
-            9) restart_samba ;;
-            10) enable_samba ;;
-            11) disable_samba ;;
-            12) launch_monitor ;;
-            13) change_editor ;;
-            14) exit 0 ;;
+            4) change_root_password ;;
+            5) rc-service samba status; echo ""; read -p "Presiona Enter para continuar..." ;;
+            6) rc-service samba restart; echo "[+] Reiniciado."; sleep 1 ;;
+            7) launch_monitor ;;
+            8) change_editor ;;
+            9) exit 0 ;;
             *) echo "Opción inválida" && sleep 1 ;;
         esac
     done
-}
-
-# === Ejecución principal ===
-[ "$1" = "-h" ] || [ "$1" = "--help" ] && {
-    echo "Uso: $(basename "$0")"
-    echo "Menú interactivo para administrar SMB y usuarios Samba"
-    exit 0
 }
 
 init_config
