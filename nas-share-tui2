@@ -45,7 +45,6 @@ backup_dynamic() {
 }
 
 rollback_dynamic() {
-    # Fix Alpine: ls -t funciona nativamente en BusyBox/Alpine para orden cronológico
     latest=$(ls -t "$BACKUP_DIR"/smb_dynamic.conf.* 2>/dev/null | head -n1)
     if [ -n "$latest" ]; then
         cp "$latest" "$SMB_DYNAMIC_CONF"
@@ -59,7 +58,6 @@ rollback_dynamic() {
 
 reload_samba() {
     echo "[*] Verificando configuración con testparm..."
-    # Corrección de redirección limpia para Alpine Linux
     if testparm -s "$SMB_DYNAMIC_CONF" >/dev/null 2>&1; then
         rc-service samba restart >/dev/null 2>&1
         echo "[+] Samba reiniciado OK."
@@ -72,7 +70,6 @@ reload_samba() {
 
 update_dynamic_smb_conf() {
     backup_dynamic
-    # Comprobación segura de existencia de archivos .conf
     if count=$(ls "$CONFIG_DIR"/*.conf 2>/dev/null) && [ -n "$count" ]; then
         cat "$CONFIG_DIR"/*.conf > "$SMB_DYNAMIC_CONF"
     else
@@ -95,13 +92,26 @@ add_smb_share() {
         return
     fi
 
-    # Ajustado a /srv/data/ para coincidir exactamente con la raíz de tu bindmount
-    read -p "Ruta relativa dentro de /srv/data/ (Ej: subcarpeta): " sub_path
-    local share_path="/srv/data/$sub_path"
+    echo "Introduce la ruta absoluta para el share."
+    echo "Dejar en blanco usará el almacenamiento raíz (/srv/data/)"
+    read -p "Ruta completa: " input_path
+
+    local share_path
+    if [[ -z "$input_path" ]]; then
+        # Opción por defecto si presiona Enter
+        share_path="/srv/data/$share_name"
+    elif [[ "$input_path" == /* ]]; then
+        # Si introduces una ruta absoluta válida (ej: /srv/data/media)
+        share_path="$input_path"
+    else
+        # Si pones texto sin barra inicial, se asume relativo a la raíz
+        share_path="/srv/data/$input_path"
+    fi
 
     if [[ ! -d "$share_path" ]]; then
         echo "[*] La ruta no existe. Creándola en: $share_path"
         mkdir -p "$share_path"
+        chown root:root "$share_path" 2>/dev/null
     fi
 
     cat <<EOF > "$CONFIG_DIR/$share_name.conf"
@@ -119,7 +129,7 @@ EOF
 
     update_dynamic_smb_conf
     reload_samba
-    echo "[+] Share SMB '$share_name' creado exitosamente."
+    echo "[+] Share SMB '$share_name' creado exitosamente en $share_path."
     sleep 1.5
 }
 
