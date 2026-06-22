@@ -92,19 +92,19 @@ add_smb_share() {
         return
     fi
 
-    echo "Introduce la ruta absoluta para el share."
-    echo "Dejar en blanco usará el almacenamiento raíz (/srv/data/)"
+    echo "Introduce la ruta exacta del directorio a compartir."
+    echo "Dejar en blanco usará directamente la raíz: /srv/data/"
     read -p "Ruta completa: " input_path
 
     local share_path
     if [[ -z "$input_path" ]]; then
-        # Opción por defecto si presiona Enter
-        share_path="/srv/data/$share_name"
+        # Toma directo la raíz sin agregarle nada al final
+        share_path="/srv/data/"
     elif [[ "$input_path" == /* ]]; then
-        # Si introduces una ruta absoluta válida (ej: /srv/data/media)
+        # Usa exactamente la ruta absoluta proporcionada
         share_path="$input_path"
     else
-        # Si pones texto sin barra inicial, se asume relativo a la raíz
+        # Si pones una carpeta relativa (ej: media), la busca directo en la raíz
         share_path="/srv/data/$input_path"
     fi
 
@@ -129,7 +129,7 @@ EOF
 
     update_dynamic_smb_conf
     reload_samba
-    echo "[+] Share SMB '$share_name' creado exitosamente en $share_path."
+    echo "[+] Share SMB '$share_name' creado exitosamente apuntando a $share_path."
     sleep 1.5
 }
 
