@@ -39,6 +39,30 @@ change_editor() {
     done
 }
 
+# === Habilitar/Deshabilitar al Inicio ===
+toggle_samba_boot() {
+    echo "--- Configurar Samba al Inicio del Sistema ---"
+    echo "Estado actual:"
+    if rc-update show default | grep -q "samba"; then
+        echo "[Activo] Samba YA está configurado para iniciar automáticamente."
+        echo ""
+        read -p "¿Deseas DESHABILITAR el inicio automático? (s/n): " respuesta
+        if [[ "$respuesta" =~ ^[sS]$ ]]; then
+            rc-update del samba default >/dev/null 2>&1
+            echo "[+] Samba eliminado del inicio automático."
+        fi
+    else
+        echo "[Inactivo] Samba NO inicia automáticamente con el sistema."
+        echo ""
+        read -p "¿Deseas HABILITAR el inicio automático ahora? (s/n): " respuesta
+        if [[ "$respuesta" =~ ^[sS]$ ]]; then
+            rc-update add samba default >/dev/null 2>&1
+            echo "[+] Samba configurado para iniciar automáticamente en el arranque."
+        fi
+    fi
+    sleep 1.5
+}
+
 # === Backup y rollback ===
 backup_dynamic() {
     cp "$SMB_DYNAMIC_CONF" "$BACKUP_DIR/smb_dynamic.conf.$(date +%Y%m%d%H%M%S)"
@@ -206,11 +230,12 @@ main_menu() {
         echo "-----------------------------------------"
         echo "  5) Ver estado del servicio Samba"
         echo "  6) Reiniciar servicio Samba"
-        echo "  7) Ver monitor del sistema (btop)"
-        echo "  8) Cambiar editor por defecto"
-        echo "  9) Salir"
+        echo "  7) Configurar Samba al inicio (Boot)"
+        echo "  8) Ver monitor del sistema (btop)"
+        echo "  9) Cambiar editor por defecto"
+        echo "  10) Salir"
         echo "========================================="
-        read -p "Opción [1-9]: " opt
+        read -p "Opción [1-10]: " opt
         case $opt in
             1) add_smb_share ;;
             2) list_and_edit_smb ;;
@@ -218,9 +243,10 @@ main_menu() {
             4) change_root_password ;;
             5) rc-service samba status; echo ""; read -p "Presiona Enter para continuar..." ;;
             6) rc-service samba restart; echo "[+] Reiniciado."; sleep 1 ;;
-            7) launch_monitor ;;
-            8) change_editor ;;
-            9) exit 0 ;;
+            7) toggle_samba_boot ;;
+            8) launch_monitor ;;
+            9) change_editor ;;
+            10) exit 0 ;;
             *) echo "Opción inválida" && sleep 1 ;;
         esac
     done
