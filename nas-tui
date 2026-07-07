@@ -1,0 +1,988 @@
+#!/bin/bash
+
+# ==========================================================
+# NAS-TUI
+# Samba Manager
+# Alpine Linux LXC + Proxmox ZFS bind mount
+# ==========================================================
+
+export TERM=xterm
+
+
+SMB_DIR="/etc/samba"
+SHARE_DIR="$SMB_DIR/smb.conf.d"
+DYNAMIC_CONF="$SMB_DIR/smb_dynamic.conf"
+
+BACKUP_DIR="/root/samba_backups"
+
+DEFAULT_GROUP="nasusers"
+
+
+mkdir -p "$SHARE_DIR"
+mkdir -p "$BACKUP_DIR"
+
+
+
+# ==========================================================
+# Helpers
+# ==========================================================
+
+msg()
+{
+    dialog --clear --msgbox "$1" 10 60
+}
+
+
+
+input()
+{
+    dialog --stdout --inputbox "$1" 10 60
+}
+
+
+
+confirm()
+{
+    dialog --yesno "$1" 10 60
+}
+
+
+
+# ==========================================================
+# Samba configuration
+# ==========================================================
+
+backup_config()
+{
+
+    if [ -f "$DYNAMIC_CONF" ]
+    then
+
+        cp "$DYNAMIC_CONF" \
+        "$BACKUP_DIR/smb_dynamic.conf.$(date +%Y%m%d-%H%M%S)"
+
+    fi
+
+}
+
+
+
+sync_config()
+{
+
+    backup_config
+
+
+    : > "$DYNAMIC_CONF"
+
+
+    for f in "$SHARE_DIR"/*.conf
+    do
+
+        [ -f "$f" ] && cat "$f" >> "$DYNAMIC_CONF"
+
+        echo "" >> "$DYNAMIC_CONF"
+
+    done
+
+}
+
+
+
+validate_samba()
+{
+
+    testparm -s >/dev/null 2>&1
+
+}
+
+
+
+restart_samba()
+{
+
+    if validate_samba
+    then
+
+        rc-service samba restart
+
+        msg "Samba reiniciado correctamente"
+
+    else
+
+        msg "ERROR:
+
+Configuración Samba inválida"
+
+    fi
+
+}
+
+
+
+# ==========================================================
+# SERVICIO SAMBA
+# ==========================================================
+
+
+samba_status()
+{
+
+{
+echo "=============================="
+echo " ESTADO SERVICIO SAMBA"
+echo "=============================="
+
+rc-service samba status
+
+
+echo ""
+echo "=============================="
+echo " INICIO AUTOMATICO"
+echo "=============================="
+
+
+if rc-update show default | grep -q samba
+then
+    echo "HABILITADO"
+else
+    echo "DESHABILITADO"
+fi
+
+
+echo ""
+echo "=============================="
+echo " CLIENTES"
+echo "=============================="
+
+
+smbstatus
+
+
+} > /tmp/nas_samba_status.txt
+
+
+
+dialog \
+--title "Estado Samba" \
+--textbox /tmp/nas_samba_status.txt 35 100
+
+}
+
+
+
+samba_start()
+{
+
+    rc-service samba start
+
+    msg "Samba iniciado"
+
+}
+
+
+
+samba_stop()
+{
+
+    rc-service samba stop
+
+    msg "Samba detenido"
+
+}
+
+
+
+samba_restart()
+{
+
+    restart_samba
+
+}
+
+
+
+samba_enable()
+{
+
+    rc-update add samba default
+
+    msg "Samba habilitado al inicio"
+
+}
+
+
+
+samba_disable()
+{
+
+    rc-update del samba default
+
+    msg "Samba deshabilitado al inicio"
+
+}
+
+
+
+# ==========================================================
+# USUARIOS
+# ==========================================================
+
+
+ensure_group()
+{
+
+    getent group "$DEFAULT_GROUP" >/dev/null || \
+    addgroup "$DEFAULT_GROUP"
+
+}
+
+
+
+create_user()
+{
+
+    ensure_group
+
+
+    USER=$(input "Nombre del usuario")
+
+
+    [ -z "$USER" ] && return
+
+
+
+    if id "$USER" >/dev/null 2>&1
+    then
+
+        msg "El usuario ya existe"
+
+        return
+
+    fi
+
+
+
+    adduser "$USER"
+
+
+    addgroup "$USER" "$DEFAULT_GROUP"
+
+
+    smbpasswd -a "$USER"
+
+
+
+    msg "Usuario creado:
+
+$USER"
+
+}
+
+
+
+delete_user()
+{
+
+    USER=$(input "Usuario a eliminar")
+
+
+    [ -z "$USER" ] && return
+
+
+
+    if confirm "Eliminar usuario:
+
+$USER ?"
+    then
+
+        smbpasswd -x "$USER" 2>/dev/null
+
+        deluser "$USER"
+
+
+        msg "Usuario eliminado"
+
+    fi
+
+}
+
+
+
+change_password()
+{
+
+    USER=$(input "Usuario Samba")
+
+
+    [ -z "$USER" ] && return
+
+
+
+    smbpasswd "$USER"
+
+
+    msg "Password actualizado"
+
+}
+
+
+
+list_users()
+{
+
+    pdbedit -L > /tmp/nas_users.txt 2>&1
+
+
+    dialog \
+    --title "Usuarios Samba" \
+    --textbox /tmp/nas_users.txt 20 70
+
+}
+
+# ==========================================================
+# SHARES
+# ==========================================================
+
+
+create_share()
+{
+
+    NAME=$(input "Nombre del share")
+
+
+    [ -z "$NAME" ] && return
+
+
+
+    PATH=$(input "Ruta absoluta del share")
+
+
+    [ -z "$PATH" ] && return
+
+
+
+    if [ ! -d "$PATH" ]
+    then
+
+        if confirm "La ruta no existe.
+
+Crear:
+
+$PATH ?"
+        then
+
+            mkdir -p "$PATH"
+
+        else
+
+            return
+
+        fi
+
+    fi
+
+
+
+    cat > "$SHARE_DIR/$NAME.conf" <<EOF
+[$NAME]
+   path = $PATH
+   browseable = yes
+   writable = yes
+   guest ok = no
+   valid users = @$DEFAULT_GROUP
+   force group = $DEFAULT_GROUP
+   create mask = 0664
+   directory mask = 0775
+EOF
+
+
+
+    sync_config
+
+
+    restart_samba
+
+
+
+    msg "Share creado:
+
+$NAME
+
+Ruta:
+
+$PATH"
+
+}
+
+
+
+list_shares()
+{
+
+    ls "$SHARE_DIR" > /tmp/nas_shares.txt 2>&1
+
+
+
+    dialog \
+    --title "Shares configurados" \
+    --textbox /tmp/nas_shares.txt 20 60
+
+}
+
+
+
+edit_share()
+{
+
+    FILES=$(ls "$SHARE_DIR" 2>/dev/null)
+
+
+
+    if [ -z "$FILES" ]
+    then
+
+        msg "No hay shares configurados"
+
+        return
+
+    fi
+
+
+
+    CHOICE=$(dialog \
+    --stdout \
+    --menu "Selecciona share" \
+    20 70 10 \
+    $(for f in $FILES; do echo "$f editar"; done))
+
+
+
+    [ -z "$CHOICE" ] && return
+
+
+
+    nano "$SHARE_DIR/$CHOICE"
+
+
+    sync_config
+
+
+    restart_samba
+
+}
+
+
+
+delete_share()
+{
+
+    FILES=$(ls "$SHARE_DIR" 2>/dev/null)
+
+
+
+    if [ -z "$FILES" ]
+    then
+
+        msg "No hay shares configurados"
+
+        return
+
+    fi
+
+
+
+    CHOICE=$(dialog \
+    --stdout \
+    --menu "Eliminar share" \
+    20 70 10 \
+    $(for f in $FILES; do echo "$f borrar"; done))
+
+
+
+    [ -z "$CHOICE" ] && return
+
+
+
+    if confirm "Eliminar:
+
+$CHOICE ?"
+    then
+
+        rm -f "$SHARE_DIR/$CHOICE"
+
+
+        sync_config
+
+
+        restart_samba
+
+
+        msg "Share eliminado"
+
+    fi
+
+}
+
+
+
+
+
+# ==========================================================
+# SISTEMA
+# ==========================================================
+
+
+system_monitor()
+{
+
+    clear
+
+    btop
+
+}
+
+
+
+storage_diagnostic()
+{
+
+
+{
+
+echo "================================"
+echo " USO DE ESPACIO"
+echo "================================"
+
+df -h
+
+
+
+echo ""
+echo "================================"
+echo " MONTAJES"
+echo "================================"
+
+mount
+
+
+
+echo ""
+echo "================================"
+echo " PERMISOS /srv/data"
+echo "================================"
+
+ls -ldn /srv/data 2>&1
+
+
+
+echo ""
+echo "================================"
+echo " IDENTIDAD DEL CONTENEDOR"
+echo "================================"
+
+id
+
+
+echo ""
+echo "================================"
+echo " GRUPOS"
+echo "================================"
+
+groups
+
+
+} > /tmp/nas_storage.txt
+
+
+
+dialog \
+--title "Diagnóstico almacenamiento" \
+--textbox /tmp/nas_storage.txt 40 110
+
+}
+
+# ==========================================================
+# BACKUP
+# ==========================================================
+
+
+manual_backup()
+{
+
+    if [ -f "$DYNAMIC_CONF" ]
+    then
+
+        cp "$DYNAMIC_CONF" \
+        "$BACKUP_DIR/manual-$(date +%Y%m%d-%H%M%S).conf"
+
+
+        msg "Backup creado:
+
+$BACKUP_DIR"
+
+    else
+
+        msg "No existe:
+
+$DYNAMIC_CONF"
+
+    fi
+
+}
+
+
+
+list_backups()
+{
+
+    ls -lh "$BACKUP_DIR" > /tmp/nas_backups.txt 2>&1
+
+
+    dialog \
+    --title "Backups Samba" \
+    --textbox /tmp/nas_backups.txt 20 80
+
+}
+
+
+
+
+
+# ==========================================================
+# SUBMENU USUARIOS
+# ==========================================================
+
+
+menu_users()
+{
+
+while true
+do
+
+
+OPTION=$(dialog \
+--stdout \
+--title "Usuarios Samba" \
+--menu "Gestión usuarios" \
+15 60 10 \
+1 "Crear usuario" \
+2 "Eliminar usuario" \
+3 "Cambiar contraseña" \
+4 "Lista usuarios" \
+0 "Volver")
+
+
+
+case "$OPTION" in
+
+1)
+create_user
+;;
+
+2)
+delete_user
+;;
+
+3)
+change_password
+;;
+
+4)
+list_users
+;;
+
+0)
+break
+;;
+
+esac
+
+
+done
+
+}
+
+
+
+
+
+# ==========================================================
+# SUBMENU SHARES
+# ==========================================================
+
+
+menu_shares()
+{
+
+while true
+do
+
+
+OPTION=$(dialog \
+--stdout \
+--title "Shares Samba" \
+--menu "Gestión shares" \
+15 60 10 \
+1 "Crear Share" \
+2 "Editar Share" \
+3 "Eliminar Share" \
+4 "Lista Shares" \
+0 "Volver")
+
+
+
+case "$OPTION" in
+
+1)
+create_share
+;;
+
+2)
+edit_share
+;;
+
+3)
+delete_share
+;;
+
+4)
+list_shares
+;;
+
+0)
+break
+;;
+
+esac
+
+
+done
+
+}
+
+
+
+
+
+# ==========================================================
+# SUBMENU SAMBA
+# ==========================================================
+
+
+menu_samba()
+{
+
+while true
+do
+
+
+OPTION=$(dialog \
+--stdout \
+--title "Servicio Samba" \
+--menu "Control OpenRC" \
+18 70 12 \
+1 "Estado Samba" \
+2 "Iniciar Samba" \
+3 "Detener Samba" \
+4 "Reiniciar Samba" \
+5 "Habilitar inicio automático" \
+6 "Deshabilitar inicio automático" \
+0 "Volver")
+
+
+
+case "$OPTION" in
+
+1)
+samba_status
+;;
+
+2)
+samba_start
+;;
+
+3)
+samba_stop
+;;
+
+4)
+samba_restart
+;;
+
+5)
+samba_enable
+;;
+
+6)
+samba_disable
+;;
+
+0)
+break
+;;
+
+esac
+
+
+done
+
+}
+
+
+
+
+
+# ==========================================================
+# SUBMENU SISTEMA
+# ==========================================================
+
+
+menu_system()
+{
+
+while true
+do
+
+
+OPTION=$(dialog \
+--stdout \
+--title "Sistema" \
+--menu "Herramientas" \
+15 70 10 \
+1 "Monitor btop" \
+2 "Diagnóstico almacenamiento" \
+0 "Volver")
+
+
+
+case "$OPTION" in
+
+1)
+system_monitor
+;;
+
+2)
+storage_diagnostic
+;;
+
+0)
+break
+;;
+
+esac
+
+
+done
+
+}
+
+
+
+
+
+# ==========================================================
+# SUBMENU BACKUP
+# ==========================================================
+
+
+menu_backup()
+{
+
+while true
+do
+
+
+OPTION=$(dialog \
+--stdout \
+--title "Backup" \
+--menu "Configuración Samba" \
+15 70 10 \
+1 "Crear backup" \
+2 "Ver backups" \
+0 "Volver")
+
+
+
+case "$OPTION" in
+
+1)
+manual_backup
+;;
+
+2)
+list_backups
+;;
+
+0)
+break
+;;
+
+esac
+
+
+done
+
+}
+
+# ==========================================================
+# MENU PRINCIPAL
+# ==========================================================
+
+
+while true
+do
+
+
+OPTION=$(dialog \
+--stdout \
+--title "NAS SMB TUI" \
+--menu "Administrador NAS" \
+18 70 10 \
+1 "Usuarios Samba" \
+2 "Shares" \
+3 "Servicio Samba" \
+4 "Sistema" \
+5 "Backup configuración" \
+0 "Salir")
+
+
+
+case "$OPTION" in
+
+
+1)
+menu_users
+;;
+
+
+2)
+menu_shares
+;;
+
+
+3)
+menu_samba
+;;
+
+
+4)
+menu_system
+;;
+
+
+5)
+menu_backup
+;;
+
+
+0)
+clear
+exit
+;;
+
+
+esac
+
+
+done
