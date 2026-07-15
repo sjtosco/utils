@@ -461,6 +461,12 @@ $PATH_SHARE ?"
    force group = $DEFAULT_GROUP
    create mask = 0664
    directory mask = 0775
+
+   # ==========================================
+   # Control de acceso (Descomentar para usar)
+   # ==========================================
+   # valid users = usuario1, usuario2
+   # invalid users = usuario_bloqueado
 EOF
 
 
