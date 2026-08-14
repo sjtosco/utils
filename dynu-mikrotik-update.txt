@@ -1,0 +1,18 @@
+PERMISOS: READ;POLICY;WRITE;TEST
+
+# --- CONFIGURACIÓN ---
+:local ddnsuser "usuario"
+:local ddnspass "pasword-ip-update"
+:local ddnshost "midominio"
+# ---------------------
+
+:local currentIP ([/tool fetch url="http://api.ipify.org" as-value output=user]->"data")
+:local dnsIP [:resolve $ddnshost]
+
+:if ($currentIP != $dnsIP) do={
+    :local update "https://api.dynu.com/nic/update\?username=$ddnsuser&password=$ddnspass&hostname=$ddnshost&myip=$currentIP"
+    /tool fetch url=$update keep-result=no
+    :log info "DYNU: Dominio $ddnshost actualizado con éxito a la IP $currentIP"
+} else={
+    :log debug "DYNU: La IP no ha cambiado ($currentIP)"
+}
