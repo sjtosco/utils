@@ -13,7 +13,7 @@ Ahora descargar repo:
 
 ```
 git clone https://github.com/bambinounos/ms91xx-linux-drm.git
-cd ms91xx-lunux-drm
+cd ms91xx-linux-drm
 ```
 
 **Solo** para *versión 3.1.4 o inferior*, editar ´drm/msdisp_drm_fb.c´:
